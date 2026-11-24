@@ -19,6 +19,9 @@ updates:
         patterns:
           - "com.android.tools.build:*"
           - "org.jetbrains.kotlin*"
+        update-types:
+          - minor
+          - patch
       androidx:
         patterns:
           - "androidx.*"
