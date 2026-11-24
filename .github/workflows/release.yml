@@ -97,7 +97,7 @@ jobs:
           sha256sum --check SHA256SUMS.txt
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: tomi-release-${{ github.ref_name }}
           path: dist/
