@@ -36,8 +36,9 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: java-kotlin
+          build-mode: manual
           queries: security-and-quality
       - name: Build
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: ./gradlew :app:compileDebugKotlin --no-build-cache --rerun-tasks --stacktrace
       - name: Analyze
         uses: github/codeql-action/analyze@v3
