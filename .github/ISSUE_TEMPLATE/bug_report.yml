@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible Tomi problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include journal text, tasks, backups, tokens, or health data. Use synthetic examples.
+  - type: input
+    id: version
+    attributes:
+      label: Tomi version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version and device
+      placeholder: Android 15, Pixel 8
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps using synthetic data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, logs, or verification
+      description: Remove personal data. State whether this was reproduced on a physical device or emulator.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Reminders
+        - Health Connect / steps
+        - Movement breaks
+        - Tasks
+        - Journal / check-in
+        - Water / progress
+        - Widget
+        - Updates
+        - Backup / settings
+        - Other
