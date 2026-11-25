@@ -4,6 +4,16 @@ Verification is recorded here only after the corresponding command or artifact c
 
 ## Current candidate: 1.1.0 (version code 1001000)
 
+### Published release
+
+Release: <https://github.com/okyssta/Tomi/releases/tag/v1.1.0>
+
+- Release workflow run `45668315427` completed successfully at commit `70b52430ef8e644f8e7336f17f50aa4cb8aa6c35`.
+- All seven published assets downloaded successfully.
+- `sha256sum --check SHA256SUMS.txt` passed from the downloaded directory.
+- Published `tomi-release.apk` SHA-256: `035cc7a3734c08b448bc0e4e83828c33ab7153492c08804f66b4011336c3b88a`.
+- Published APK/AAB exact package, version, SDK, certificate, Play exclusions, and APK 16 KB alignment passed `scripts/verify-release.sh v1.1.0`.
+
 ### Automated checks
 
 | Check | Command | Result |
