@@ -1,0 +1,11 @@
+<resources>
+    <string name="channel_updates_name">App updates</string>
+    <string name="channel_updates_description">Checks for new Tomi releases and verified update downloads.</string>
+    <string name="action_open_release">Open release</string>
+    <string name="update_available_title">Tomi %1$s is available</string>
+    <string name="update_available_text">Open Tomi to review the release and update.</string>
+    <string name="update_downloading_title">Downloading Tomi update</string>
+    <string name="update_downloading_progress">%1$d%% downloaded</string>
+    <string name="update_ready_title">Tomi %1$s is ready</string>
+    <string name="update_ready_text">The download was verified. Tap to install.</string>
+</resources>

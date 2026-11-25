@@ -16,6 +16,7 @@ val releaseKeystoreProperties = Properties().apply {
 android {
     namespace = "com.tomi.app"
     compileSdk = 36
+    flavorDimensions += "distribution"
 
     defaultConfig {
         applicationId = "com.tomi.app"
@@ -26,6 +27,32 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "GITHUB_REPOSITORY", "\"okyssta/Tomi\"")
+        buildConfigField("String", "PRIVACY_POLICY_URL", "\"https://okyssta.github.io/Tomi/privacy.html\"")
+    }
+
+    productFlavors {
+        create("direct") {
+            dimension = "distribution"
+            buildConfigField("boolean", "UPDATES_ENABLED", "true")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "UPDATES_ENABLED", "false")
+        }
+    }
+
+    sourceSets {
+        getByName("direct") { java.srcDir("src/direct/java") }
+        getByName("play") { java.srcDir("src/play/java") }
+    }
+
+    signingConfigs {
+        create("release") {
+            releaseKeystoreProperties.getProperty("storeFile")?.let { storeFile = rootProject.file(it) }
+            storePassword = releaseKeystoreProperties.getProperty("storePassword")
+            keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+            keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+        }
     }
 
     buildTypes {
@@ -38,16 +65,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (releaseKeystoreProperties.isNotEmpty()) {
-                signingConfigs.create("release") {
-                    storeFile = rootProject.file(releaseKeystoreProperties.getProperty("storeFile"))
-                    storePassword = releaseKeystoreProperties.getProperty("storePassword")
-                    keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
-                    keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
-                }
-            } else {
-                null
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

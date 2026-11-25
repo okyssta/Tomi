@@ -28,9 +28,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
@@ -44,6 +49,7 @@ import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 import com.tomi.app.data.local.MovementEntity
 import com.tomi.app.data.local.MovementType
+import com.tomi.app.ui.components.ConfirmDeleteDialog
 import com.tomi.app.domain.movement.MovementStreak
 import com.tomi.app.health.StepSyncPlanner
 import com.tomi.app.ui.TomiViewModel
@@ -51,6 +57,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +66,9 @@ fun ProgressScreen(viewModel: TomiViewModel) {
     val movements by viewModel.movements.collectAsStateWithLifecycle()
     val todayMovements by viewModel.todayMovements.collectAsStateWithLifecycle()
     val steps by viewModel.todaySteps.collectAsStateWithLifecycle()
-    val today = LocalDate.now()
+    val dayContext by viewModel.dayContext.collectAsStateWithLifecycle()
+    var pendingDelete by remember { mutableStateOf<MovementEntity?>(null) }
+    val today = dayContext.date
     val days = remember(today) { StepSyncPlanner.lastDays(today, 7) }
     val weeklySteps = remember(stepCache, days) {
         days.map { day -> stepCache.firstOrNull { it.date == day.toString() }?.steps ?: 0L }
@@ -98,9 +107,17 @@ fun ProgressScreen(viewModel: TomiViewModel) {
                             modelProducer = modelProducer,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(220.dp),
+                                .height(220.dp)
+                                .semantics {
+                                    contentDescription = weeklyStepsDescription(days, weeklySteps)
+                                },
                         )
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clearAndSetSemantics { },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
                             days.forEach { day ->
                                 Text(
                                     text = day.dayOfWeek.name.take(1),
@@ -154,9 +171,37 @@ fun ProgressScreen(viewModel: TomiViewModel) {
                 }
             } else {
                 items(movements.take(50), key = { it.id }) { session ->
-                    MovementRow(session = session, onDelete = { viewModel.deleteMovement(session) })
+                    MovementRow(session = session, onDelete = { pendingDelete = session })
                 }
             }
+        }
+    }
+    pendingDelete?.let { session ->
+        ConfirmDeleteDialog(
+            title = "Delete movement?",
+            message = "This ${session.type.label.lowercase()} session will be permanently deleted.",
+            onConfirm = {
+                viewModel.deleteMovement(session)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+}
+
+internal fun weeklyStepsDescription(days: List<LocalDate>, steps: List<Long>): String {
+    require(days.size == steps.size)
+    val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US)
+    return buildString {
+        append("Weekly steps. Total ")
+        append("%,d".format(Locale.US, steps.sum()))
+        append('.')
+        days.forEachIndexed { index, day ->
+            append(' ')
+            append(day.format(formatter))
+            append(": ")
+            append("%,d".format(Locale.US, steps[index]))
+            append(if (steps[index] == 1L) " step." else " steps.")
         }
     }
 }

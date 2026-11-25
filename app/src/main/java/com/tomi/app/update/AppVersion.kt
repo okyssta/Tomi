@@ -1,5 +1,8 @@
 package com.tomi.app.update
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class AppVersion(
     val major: Int,
     val minor: Int,

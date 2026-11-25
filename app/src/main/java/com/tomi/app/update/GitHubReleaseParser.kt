@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
+@Serializable
 data class UpdateInfo(
     val version: AppVersion,
     val versionName: String,
@@ -19,19 +20,19 @@ data class UpdateInfo(
 object GitHubReleaseParser {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun parse(content: String): UpdateInfo? {
+    fun parse(content: String, expectedRepository: String = "okyssta/Tomi"): UpdateInfo? {
         return try {
             val release = json.decodeFromString(GitHubReleaseDto.serializer(), content)
             if (release.draft || release.prerelease) return null
 
             val apk = release.assets.firstOrNull {
-                it.name.endsWith(".apk", ignoreCase = true) && it.browserDownloadUrl.isSecureGitHubUrl()
+                it.name.endsWith(".apk", ignoreCase = true) && GitHubReleaseUrls.isAllowed(it.browserDownloadUrl, expectedRepository)
             } ?: return null
             val checksum = release.assets.firstOrNull {
                 it.name.equals("SHA256SUMS.txt", ignoreCase = true) &&
-                    it.browserDownloadUrl.isSecureGitHubUrl()
+                    GitHubReleaseUrls.isAllowed(it.browserDownloadUrl, expectedRepository)
             } ?: return null
-            if (!release.htmlUrl.isSecureGitHubUrl()) return null
+            if (!GitHubReleaseUrls.isAllowed(release.htmlUrl, expectedRepository)) return null
 
             UpdateInfo(
                 version = AppVersion.parse(release.tagName),
@@ -49,9 +50,6 @@ object GitHubReleaseParser {
             null
         }
     }
-
-    private fun String.isSecureGitHubUrl(): Boolean =
-        startsWith("https://github.com/") && !contains("..")
 
     @Serializable
     private data class GitHubReleaseDto(

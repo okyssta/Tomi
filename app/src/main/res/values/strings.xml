@@ -1,22 +1,16 @@
 <resources>
     <string name="app_name">Tomi</string>
-    <string name="channel_movement_name">Movement reminders</string>
     <string name="channel_movement_description">Gentle reminders to stand, stretch, or walk during your workday.</string>
-    <string name="channel_updates_name">App updates</string>
-    <string name="channel_updates_description">Checks for new Tomi releases and verified update downloads.</string>
+    <string name="channel_movement_alarm_full_name">Movement alarm · sound &amp; vibration</string>
+    <string name="channel_movement_alarm_sound_name">Movement alarm · sound</string>
+    <string name="channel_movement_alarm_vibrate_name">Movement alarm · vibration</string>
+    <string name="channel_movement_alarm_silent_name">Movement alarm · silent</string>
     <string name="reminder_title">Time to move</string>
     <string name="reminder_text">Stand up, stretch, or take a short walk.</string>
     <string name="reminder_big_text">You have been sitting for a while. A two-minute movement break can help you reset. Stand tall, roll your shoulders, and take a short walk when you can.</string>
-    <string name="reminder_test_title">Tomi reminder test</string>
-    <string name="reminder_test_text">Movement reminders are working.</string>
+    <string name="reminder_test_title">Tomi alarm test</string>
+    <string name="reminder_test_text">Your movement alarm is working.</string>
     <string name="action_start_break">Start break</string>
     <string name="action_snooze_10">Snooze 10 min</string>
-    <string name="action_open_release">Open release</string>
-    <string name="update_available_title">Tomi %1$s is available</string>
-    <string name="update_available_text">Open Tomi to review the release and update.</string>
-    <string name="update_downloading_title">Downloading Tomi update</string>
-    <string name="update_downloading_progress">%1$d%% downloaded</string>
-    <string name="update_ready_title">Tomi %1$s is ready</string>
-    <string name="update_ready_text">The download was verified. Tap to install.</string>
     <string name="widget_description">Tomi steps, movement reminders, and quick break actions.</string>
 </resources>

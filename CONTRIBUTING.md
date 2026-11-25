@@ -12,10 +12,16 @@ Thanks for helping improve Tomi.
 ## Development loop
 
 ```sh
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew :app:testDirectDebugUnitTest :app:testPlayDebugUnitTest :app:lintDirectDebug :app:lintPlayDebug
 ```
 
 For behavior changes, add or update tests first. Keep business logic in pure Kotlin or repository classes rather than composables.
+
+Release-verifier policy checks run without the Android toolchain:
+
+```sh
+bash scripts/test-verify-release.sh
+```
 
 ## Pull requests
 

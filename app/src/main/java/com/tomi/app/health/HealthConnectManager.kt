@@ -8,14 +8,20 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import com.tomi.app.backup.DataMaintenanceCoordinator
 import com.tomi.app.data.local.StepCacheDao
 import com.tomi.app.data.local.StepCacheEntity
 import com.tomi.app.data.settings.SettingsRepository
+import com.tomi.app.reminder.MovementCheckpoint
+import com.tomi.app.reminder.MovementCheckpointLock
 import com.tomi.app.widget.TomiWidget
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 
 enum class HealthStatus {
     UNKNOWN,
@@ -31,10 +37,18 @@ sealed interface StepSyncResult {
     data class Error(val cause: Throwable) : StepSyncResult
 }
 
+sealed interface StepDeltaResult {
+    data class Success(val steps: Long, val queryEnd: Instant? = null) : StepDeltaResult
+    data class Error(val cause: Throwable) : StepDeltaResult
+}
+
 class HealthConnectManager(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val stepCacheDao: StepCacheDao,
+    private val permissionChecker: (suspend () -> Boolean)? = null,
+    private val stepsReader: (suspend (Instant, Instant) -> Long)? = null,
+    private val widgetUpdater: (() -> Unit)? = null,
 ) {
     private val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
@@ -56,24 +70,31 @@ class HealthConnectManager(
                 HealthStatus.AVAILABLE_NEEDS_PERMISSION
             }
         }
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         HealthStatus.UNAVAILABLE
     }
 
     suspend fun hasReadPermission(): Boolean = try {
-        client.permissionController.getGrantedPermissions().containsAll(requiredPermissions)
+        permissionChecker?.invoke() ?: client.permissionController.getGrantedPermissions().containsAll(requiredPermissions)
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         false
     }
 
     suspend fun hasBackgroundReadPermission(): Boolean = try {
         client.permissionController.getGrantedPermissions().containsAll(optionalPermissions)
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         false
     }
 
     suspend fun readSteps(start: Instant, end: Instant): Long {
         require(end.isAfter(start))
+        stepsReader?.let { return it(start, end) }
         val response = client.aggregate(
             AggregateRequest(
                 metrics = setOf(StepsRecord.COUNT_TOTAL),
@@ -83,46 +104,63 @@ class HealthConnectManager(
         return response[StepsRecord.COUNT_TOTAL] ?: 0L
     }
 
-    suspend fun syncSteps(days: Int = 7, now: Instant = Instant.now()): StepSyncResult {
+    suspend fun syncSteps(days: Int = 7, now: Instant = Instant.now()): StepSyncResult =
+        DataMaintenanceCoordinator.exclusive { syncStepsExclusive(days, now) }
+
+    internal suspend fun syncStepsExclusive(days: Int = 7, now: Instant = Instant.now()): StepSyncResult {
         if (!hasReadPermission()) return StepSyncResult.PermissionRequired
+        val queriedCheckpoint = settingsRepository.runtime.first().lastStepCheckAt
         val zone = ZoneId.systemDefault()
         val today = now.atZone(zone).toLocalDate()
         var total = 0L
+        var syncedDays = 0
         return try {
             StepSyncPlanner.lastDays(today, days).forEach { date ->
                 val bounds = StepSyncPlanner.dayBounds(date, zone)
-                val steps = readSteps(bounds.start, bounds.endExclusive)
-                stepCacheDao.upsert(
+                val queryEnd = StepSyncPlanner.queryEnd(date, today, bounds.start, bounds.endExclusive, now)
+                    ?: return@forEach
+                val steps = readSteps(bounds.start, queryEnd)
+                StepCacheWriter.write(
+                    stepCacheDao,
                     StepCacheEntity(
                         date = date.toString(),
                         steps = steps,
-                        updatedAt = System.currentTimeMillis(),
+                        updatedAt = queryEnd.toEpochMilli(),
                     ),
                 )
                 total += steps
+                syncedDays++
             }
-            settingsRepository.updateRuntime { it.copy(lastStepCheckAt = now.toEpochMilli()) }
-            runCatching { TomiWidget().updateAll(context) }
-            StepSyncResult.Success(days, total)
+            MovementCheckpointLock.mutex.withLock {
+                settingsRepository.updateRuntime {
+                    MovementCheckpoint.advance(it, queriedCheckpoint, steps = 0L, now = now.toEpochMilli())
+                }
+            }
+            if (widgetUpdater != null) widgetUpdater.invoke() else runCatching { TomiWidget().updateAll(context) }
+            StepSyncResult.Success(syncedDays, total)
         } catch (_: SecurityException) {
             StepSyncResult.PermissionRequired
         } catch (error: IOException) {
             StepSyncResult.Error(error)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             StepSyncResult.Error(error)
         }
     }
 
-    suspend fun stepsSince(lastCheck: Instant?): Long {
-        if (lastCheck == null) return 0L
+    suspend fun stepsSince(lastCheck: Instant?): StepDeltaResult {
+        if (lastCheck == null) return StepDeltaResult.Success(0L)
         val now = Instant.now()
-        if (!now.isAfter(lastCheck)) return 0L
+        if (!now.isAfter(lastCheck)) return StepDeltaResult.Success(0L)
         return try {
-            readSteps(lastCheck, now)
+            StepDeltaResult.Success(readSteps(lastCheck, now), queryEnd = now)
         } catch (_: SecurityException) {
-            0L
+            StepDeltaResult.Error(SecurityException("Health Connect step permission denied"))
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
-            0L
+            StepDeltaResult.Error(IllegalStateException("Could not read Health Connect steps"))
         }
     }
 

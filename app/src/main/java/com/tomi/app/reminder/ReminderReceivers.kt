@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.tomi.app.data.settings.SettingsRepository
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,7 +14,9 @@ import kotlinx.coroutines.launch
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scope = CoroutineScope(
+            SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, _ -> },
+        )
         scope.launch {
             try {
                 val scheduler = ReminderScheduler(
@@ -43,14 +46,18 @@ class BootReceiver : BroadcastReceiver() {
             )
         ) return
         val pendingResult = goAsync()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scope = CoroutineScope(
+            SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, _ -> },
+        )
         scope.launch {
             try {
-                ReminderScheduler(
+                val scheduler = ReminderScheduler(
                     context,
                     SettingsRepository.from(context),
                     ReminderNotifier(context),
-                ).reschedule()
+                )
+                if (intent.action == Intent.ACTION_TIME_CHANGED) scheduler.onClockChanged()
+                scheduler.checkAndNotifyIfDue()
                 ReminderWorker.enqueue(context)
             } finally {
                 pendingResult.finish()

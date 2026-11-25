@@ -51,6 +51,7 @@ fun TomiNavHost(
     onRouteHandled: () -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestHealthPermissions: () -> Unit,
+    onRequestBackgroundHealthPermissions: () -> Unit,
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -61,11 +62,20 @@ fun TomiNavHost(
     LaunchedEffect(viewModel) {
         viewModel.events.collect { message -> snackbarHostState.showSnackbar(message) }
     }
-    LaunchedEffect(initialRoute) {
-        if (!initialRoute.isNullOrBlank()) {
-            navController.navigate(initialRoute) { launchSingleTop = true }
-            onRouteHandled()
+    LaunchedEffect(viewModel) {
+        viewModel.dataCleared.collect {
+            navController.navigate("onboarding") {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
         }
+    }
+    LaunchedEffect(initialRoute) {
+        val route = ExternalRoute.resolve(initialRoute, onboardingComplete = startDestination != "onboarding")
+        if (route != null) {
+            navController.navigate(route) { launchSingleTop = true }
+        }
+        onRouteHandled()
     }
 
     Scaffold(
@@ -122,7 +132,11 @@ fun TomiNavHost(
             composable("journal") { JournalScreen(viewModel) }
             composable("progress") { ProgressScreen(viewModel) }
             composable("settings") {
-                SettingsScreen(viewModel = viewModel, onConnectHealth = onRequestHealthPermissions)
+                SettingsScreen(
+                    viewModel = viewModel,
+                    onConnectHealth = onRequestHealthPermissions,
+                    onRequestBackgroundHealthPermissions = onRequestBackgroundHealthPermissions,
+                )
             }
             composable("move/{type}") { entry ->
                 val type = runCatching { MovementType.valueOf(entry.arguments?.getString("type").orEmpty()) }

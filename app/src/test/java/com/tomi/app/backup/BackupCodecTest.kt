@@ -9,6 +9,7 @@ import com.tomi.app.data.settings.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.ByteArrayInputStream
 import java.time.DayOfWeek
 
 class BackupCodecTest {
@@ -55,6 +56,29 @@ class BackupCodecTest {
     }
 
     @Test
+    fun `rejects structurally incomplete backups`() {
+        val incomplete = listOf(
+            "{}",
+            """{"version":1}""",
+            """{"version":1,"settings":{}}""",
+            BackupCodec.encode(TomiBackup()).replace("\"tasks\": []", "").replace(",\n\n", "\n"),
+        )
+
+        incomplete.forEach { content ->
+            assertThrows("Incomplete backup: $content", IllegalArgumentException::class.java) {
+                BackupCodec.decode(content)
+            }
+        }
+    }
+
+    @Test
+    fun `accepts a structurally complete empty backup`() {
+        val backup = TomiBackup()
+
+        assertEquals(backup, BackupCodec.decode(BackupCodec.encode(backup)))
+    }
+
+    @Test
     fun `rejects unsupported backup versions`() {
         val json = BackupCodec.encode(TomiBackup()).replace("\"version\": 1", "\"version\": 99")
 
@@ -64,6 +88,94 @@ class BackupCodecTest {
     @Test
     fun `rejects malformed json`() {
         assertThrows(Exception::class.java) { BackupCodec.decode("not a backup") }
+    }
+
+    @Test
+    fun `rejects invalid reminder settings before any data is replaced`() {
+        val backup = TomiBackup(settings = SettingsBackup(intervalMinutes = 99))
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(BackupCodec.encode(backup)) }
+    }
+
+    @Test
+    fun `rejects negative movement and health values`() {
+        val backup = TomiBackup(
+            movements = listOf(MovementBackup(1L, MovementType.WALK, 1_000L, 500L, -1, null, "")),
+            water = listOf(WaterBackup(1L, -250, 1_000L)),
+            stepCache = listOf(StepCacheBackup("2026-11-24", -5L, 1_000L)),
+        )
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(BackupCodec.encode(backup)) }
+    }
+
+    @Test
+    fun `rejects invalid check-in dates and mood values`() {
+        val backup = TomiBackup(checkIns = listOf(CheckInBackup("not-a-date", 9, 3, "", 1L)))
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(BackupCodec.encode(backup)) }
+    }
+
+    @Test
+    fun `rejects duplicate primary keys`() {
+        val task = TaskBackup(1L, "Task", "", null, 2, "", false, null, 1L, 1L)
+        val backup = TomiBackup(tasks = listOf(task, task))
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(BackupCodec.encode(backup)) }
+    }
+
+    @Test
+    fun `rejects autoincrement ids that leave no safe sequence headroom`() {
+        val unsafeIds = listOf(Long.MAX_VALUE, Long.MAX_VALUE - 1L)
+        val backups = listOf<Pair<String, (Long) -> TomiBackup>>(
+            "task" to { id -> TomiBackup(tasks = listOf(TaskBackup(id, "Task", "", null, 1, "", false, null, 1L, 1L))) },
+            "journal" to { id -> TomiBackup(journal = listOf(JournalBackup(id, "Entry", "Body", null, "", false, 1L, 1L))) },
+            "movement" to { id -> TomiBackup(movements = listOf(MovementBackup(id, MovementType.WALK, 1L, 2L, 1, null, ""))) },
+            "water" to { id -> TomiBackup(water = listOf(WaterBackup(id, 250, 1L))) },
+        )
+
+        backups.forEach { (name, backup) ->
+            unsafeIds.forEach { id ->
+                assertThrows("Unsafe $name id $id", IllegalArgumentException::class.java) {
+                    BackupCodec.encode(backup(id))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `accepts an autoincrement id at the safe headroom boundary`() {
+        val id = Long.MAX_VALUE - 10_000L
+        val backup = TomiBackup(tasks = listOf(TaskBackup(id, "Task", "", null, 1, "", false, null, 1L, 1L)))
+
+        assertEquals(backup, BackupCodec.decode(BackupCodec.encode(backup)))
+    }
+
+    @Test
+    fun `rejects an oversized input stream`() {
+        val input = ByteArrayInputStream(ByteArray(25_000_001))
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(input) }
+    }
+
+    @Test
+    fun `rejects an oversized encoded backup`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupCodec.requireEncodedSize(25_000_001L)
+        }
+    }
+
+    @Test
+    fun `rejects a collection over the record limit`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupCodec.requireCollectionSize(10_001)
+        }
+    }
+
+    @Test
+    fun `decodes bytes without an intermediate string copy`() {
+        val backup = TomiBackup(tasks = listOf(TaskBackup(1L, "Task", "", null, 1, "", false, null, 1L, 1L)))
+
+        assertEquals(backup, BackupCodec.decode(BackupCodec.encode(backup).toByteArray(Charsets.UTF_8)))
     }
 
     @Test
@@ -77,5 +189,15 @@ class BackupCodecTest {
             DailyCheckInEntity("2026-11-24", 3, 4, "Okay", 5L),
             DailyCheckInEntity("2026-11-24", 3, 4, "Okay", 5L).toBackup().toEntity(),
         )
+    }
+
+    @Test
+    fun `rejects future-dated step cache entries`() {
+        val future = System.currentTimeMillis() + 3_600_000L
+        val backup = TomiBackup(stepCache = listOf(StepCacheBackup("2026-11-25", 100L, future)))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupCodec.encode(backup)
+        }
     }
 }

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.os.Build
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
@@ -31,6 +32,12 @@ class UpdateNotifier(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun showAvailable(info: UpdateInfo) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
         val openApp = PendingIntent.getActivity(
             context,
             3001,

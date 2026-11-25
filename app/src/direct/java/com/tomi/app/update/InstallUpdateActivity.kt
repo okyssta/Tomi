@@ -39,7 +39,7 @@ class InstallUpdateActivity : Activity() {
     }
 
     companion object {
-        const val EXTRA_APK_PATH = "apk_path"
-        const val EXTRA_VERSION = "version"
+        const val EXTRA_APK_PATH = InstallUpdateContract.EXTRA_APK_PATH
+        const val EXTRA_VERSION = InstallUpdateContract.EXTRA_VERSION
     }
 }

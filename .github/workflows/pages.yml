@@ -1,0 +1,66 @@
+name: Deploy privacy policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/privacy.html
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish privacy policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Stage privacy policy
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp docs/privacy.html _site/privacy.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify public privacy policy
+        env:
+          PRIVACY_POLICY_URL: https://okyssta.github.io/Tomi/privacy.html
+        shell: bash
+        run: |
+          LOCAL_SHA256="$(sha256sum docs/privacy.html | cut -d ' ' -f 1)"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location --output "$RUNNER_TEMP/published-privacy.html" "$PRIVACY_POLICY_URL"; then
+              REMOTE_SHA256="$(sha256sum "$RUNNER_TEMP/published-privacy.html" | cut -d ' ' -f 1)"
+              if [[ "$REMOTE_SHA256" == "$LOCAL_SHA256" ]]; then
+                echo "Published privacy policy matches the repository SHA-256"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Published privacy policy did not match the repository content: $PRIVACY_POLICY_URL" >&2
+          exit 1

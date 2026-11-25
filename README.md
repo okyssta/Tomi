@@ -11,14 +11,14 @@ Tomi is an offline-first Android companion for people who spend long workdays at
 - **Sedentary reminders:** configurable 30–45 minute intervals, active days, active hours, sound, vibration, snooze, and smart pause after detected movement.
 - **Step tracking:** aggregated daily and weekly steps through Google Health Connect. Includes phone steps and connected sources such as Google Fit.
 - **Movement breaks:** walk and stretch timers, a stand-up reset, and a push-up rep counter. Completed sessions are stored locally.
-- **Tasks:** create, edit, search, filter, prioritize, categorize, schedule, complete, and delete tasks.
+- **Tasks:** create, edit, search, filter, prioritize, categorize, set both due date and due time, complete, and delete tasks.
 - **Journal:** searchable entries with mood, tags, pinning, and editing.
 - **Daily check-in:** mood and energy tracking.
 - **Water:** 250 ml quick-add with undo and a configurable daily goal.
 - **Progress:** weekly step chart, active minutes, movement history, and a movement-day streak.
 - **Widget:** steps, next reminder, and quick break actions on the home screen.
 - **Backups:** JSON export/import for tasks, journal, movement, check-ins, water, cached steps, and settings.
-- **Updates:** automatic release checks, optional Wi-Fi downloads, SHA-256 verification, and an explicit Android install prompt.
+- **Direct-download updates:** automatic release checks, optional Wi-Fi downloads, SHA-256 plus pinned signing-identity verification, and an explicit Android install prompt. The Play edition relies on Play updates.
 - **Material 3:** standard Android components, dynamic color, light/dark/system themes, and no custom decorative UI framework.
 
 ## Install
@@ -32,7 +32,7 @@ Download `tomi-release.apk` from the [latest release](https://github.com/okyssta
 - In Tomi, open **Settings → Permissions & steps → Health Connect** and allow step access.
 - To include Google Fit data, connect Google Fit to Health Connect. Tomi reads the combined Health Connect total; it does not require a Google account or OAuth client.
 
-The release APK is signed. Android will only install an update signed with the same key. Tomi never installs an update without showing the system package-installer confirmation.
+The release APK is signed. Android will only install an update signed with the same key. Tomi never installs an update without showing the system package-installer confirmation. A signed Play AAB is also published in each release; Play submission still requires the manual gates in [docs/STORE.md](docs/STORE.md).
 
 ## Google Fit status
 
@@ -40,27 +40,27 @@ Google deprecated the Google Fit APIs in 2024 and plans to turn them down at the
 
 ## Privacy
 
-Tomi has no account, ads, analytics, location tracking, or cloud sync. Tasks, journal entries, settings, movement sessions, and cached step totals are stored in the app's local database. Health Connect remains read-only. The only network requests are:
+Tomi has no account, ads, analytics, location tracking, or cloud sync. Tasks, journal entries, settings, movement sessions, and cached step totals are stored in the app's local database. Health Connect remains read-only. The direct edition's only network requests are:
 
 1. GitHub release metadata and release-asset downloads for the in-app updater.
 2. Google Play links when Health Connect must be installed or updated.
 
-See [docs/PRIVACY.md](docs/PRIVACY.md) for the full data and permission model.
+Read [docs/PRIVACY.md](docs/PRIVACY.md) for the full data and permission model. A GitHub Pages workflow is provided for the [privacy-policy URL](https://okyssta.github.io/Tomi/privacy.html), but publication remains unverified until Pages is enabled and the workflow's HTTP 200 gate passes; see [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## Development
 
 Requirements: JDK 17, Android SDK 36, and the Gradle wrapper included in the repository.
 
 ```sh
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew testDirectDebugUnitTest testPlayDebugUnitTest lintDirectDebug lintPlayDebug assembleDirectDebug assemblePlayDebug
 ```
 
-The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+Debug APKs are written under `app/build/outputs/apk/direct/debug/` and `app/build/outputs/apk/play/debug/`.
 
 For a signed local release, create an untracked `keystore.properties` file as described in [docs/RELEASE.md](docs/RELEASE.md), then run:
 
 ```sh
-./gradlew testDebugUnitTest lintRelease assembleRelease
+./gradlew testDirectDebugUnitTest testPlayDebugUnitTest lintDirectRelease lintPlayRelease assembleDirectRelease bundlePlayRelease -PVERSION_CODE=1001000 -PVERSION_NAME=1.1.0
 ```
 
 ## Repository layout
@@ -83,7 +83,7 @@ scripts/        Published-release verification
 
 ## Verification
 
-The project runs unit tests, Room integration tests on bundled SQLite, a Compose onboarding UI test, Android lint, and debug/release APK builds. See [docs/VERIFICATION.md](docs/VERIFICATION.md) and the [CI workflow](.github/workflows/ci.yml).
+The project runs unit tests, Room integration tests on bundled SQLite, Compose UI tests, Android lint, and debug/release builds for both direct and Play flavors. CI also produces a signed direct APK and Play AAB on stable release tags. See [docs/VERIFICATION.md](docs/VERIFICATION.md) and the [CI workflow](.github/workflows/ci.yml).
 
 ## Known limits
 
@@ -91,7 +91,8 @@ The project runs unit tests, Room integration tests on bundled SQLite, a Compose
 - Health Connect access requires Android 14+ or the separate Health Connect app.
 - Google Fit cloud history that has not been written to Health Connect is not available to Tomi.
 - Smart pause needs Health Connect read access; without it, reminders continue on the fixed interval.
-- Updates require a network connection and the user's approval to install from unknown apps.
+- Direct-download updates require a network connection and the user's approval to install from unknown apps. Play updates do not use Tomi's installer.
+- Google Play production submission still requires Console declarations, real screenshots, physical-device QA, and a staged rollout; the AAB is not by itself a Play launch.
 
 ## License
 

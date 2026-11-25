@@ -2,13 +2,10 @@ package com.tomi.app.reminder
 
 import android.annotation.SuppressLint
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -21,17 +18,7 @@ class ReminderNotifier(private val context: Context) {
     private val notificationManager = NotificationManagerCompat.from(context)
 
     init {
-        val channel = NotificationChannel(
-            CHANNEL_MOVEMENT,
-            context.getString(R.string.channel_movement_name),
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = context.getString(R.string.channel_movement_description)
-            setSound(null, null)
-            enableVibration(false)
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-        }
-        notificationManager.createNotificationChannel(channel)
+        MovementAlarmChannel.ensureChannels(context)
     }
 
     @SuppressLint("MissingPermission")
@@ -53,8 +40,10 @@ class ReminderNotifier(private val context: Context) {
             Intent(context, ReminderReceiver::class.java).apply { action = ReminderScheduler.ACTION_SNOOZE },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val notification = NotificationCompat.Builder(context, CHANNEL_MOVEMENT)
+        val notification = NotificationCompat.Builder(
+            context,
+            MovementAlarmChannel.id(settings.sound, settings.vibrate),
+        )
             .setSmallIcon(R.drawable.ic_stat_tomi)
             .setContentTitle(context.getString(R.string.reminder_title))
             .setContentText(context.getString(R.string.reminder_text))
@@ -66,22 +55,9 @@ class ReminderNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setContentIntent(startBreakIntent)
-            .addAction(0, context.getString(R.string.action_start_break), startBreakIntent)
-            .addAction(0, context.getString(R.string.action_snooze_10), snoozeIntent)
+            .addAction(R.drawable.ic_stat_tomi, context.getString(R.string.action_start_break), startBreakIntent)
+            .addAction(R.drawable.ic_stat_tomi, context.getString(R.string.action_snooze_10), snoozeIntent)
             .setAutoCancel(true)
-            .setOnlyAlertOnce(true)
-            .apply {
-                if (settings.sound) {
-                    setSound(defaultSound)
-                } else {
-                    setSound(null)
-                }
-                if (settings.vibrate) {
-                    setVibrate(longArrayOf(0L, 180L, 120L, 180L))
-                } else {
-                    setVibrate(null)
-                }
-            }
             .build()
         notificationManager.notify(NOTIFICATION_MOVEMENT, notification)
     }
@@ -91,7 +67,7 @@ class ReminderNotifier(private val context: Context) {
         if (!canPostNotifications()) return
         notificationManager.notify(
             NOTIFICATION_TEST,
-            NotificationCompat.Builder(context, CHANNEL_MOVEMENT)
+            NotificationCompat.Builder(context, MovementAlarmChannel.ID_SOUND_VIBRATE)
                 .setSmallIcon(R.drawable.ic_stat_tomi)
                 .setContentTitle(context.getString(R.string.reminder_test_title))
                 .setContentText(context.getString(R.string.reminder_test_text))
@@ -111,7 +87,6 @@ class ReminderNotifier(private val context: Context) {
             PackageManager.PERMISSION_GRANTED
 
     companion object {
-        const val CHANNEL_MOVEMENT = "movement_reminders"
         const val CHANNEL_UPDATES = "updates"
         private const val NOTIFICATION_MOVEMENT = 2001
         private const val NOTIFICATION_TEST = 2002

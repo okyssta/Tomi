@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tomi Privacy Policy</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, Segoe UI, sans-serif; line-height: 1.6; }
+    body { max-width: 820px; margin: 0 auto; padding: 32px 22px 64px; }
+    h1, h2 { line-height: 1.2; }
+    h1 { margin-bottom: 4px; }
+    .meta, footer { color: #64748b; font-size: 0.92rem; }
+    section { margin-top: 28px; }
+    li { margin: 6px 0; }
+    code { font-family: ui-monospace, monospace; }
+    @media (prefers-color-scheme: dark) { body { background: #0e1714; color: #e7efec; } .meta, footer { color: #9fb0aa; } a { color: #8fe0bd; } }
+  </style>
+</head>
+<body>
+  <h1>Tomi Privacy Policy</h1>
+  <p class="meta">Effective 25 November 2026 · Version 1.1 · Applies to Tomi for Android</p>
+
+  <p>Tomi is an offline-first movement, task, and journal app for people who work at a desk. This policy explains what data Tomi handles, why it is handled, and the choices you have.</p>
+
+  <section>
+    <h2>Who is responsible</h2>
+    <p>Tomi is developed and published by <a href="https://github.com/okyssta">@okyssta</a>. Privacy or security questions can be reported through the repository's <a href="https://github.com/okyssta/Tomi/security/advisories/new">private vulnerability reporting</a> channel.</p>
+  </section>
+
+  <section>
+    <h2>Data stored on your device</h2>
+    <ul>
+      <li>Tasks, due dates and times, notes, categories, priorities, and completion state.</li>
+      <li>Journal titles, text, tags, mood, and pinned state.</li>
+      <li>Movement sessions such as walks, stretches, standing breaks, and push-up sets.</li>
+      <li>Daily mood and energy check-ins.</li>
+      <li>Water entries and daily goals.</li>
+      <li>Step totals cached from Health Connect for display in Tomi.</li>
+      <li>Reminder, appearance, goal, and update preferences.</li>
+    </ul>
+    <p>This data is stored in Tomi's app-private Room database and DataStore files. It is not uploaded to a Tomi server. Android cloud backup and device-transfer extraction are disabled; Tomi provides explicit JSON export and import instead.</p>
+  </section>
+
+  <section>
+    <h2>Health Connect</h2>
+    <p>With your permission, Tomi reads aggregated step totals through Android Health Connect. Step data is used to show daily and weekly progress and, only if you separately allow background access, to reset the movement reminder after Tomi detects walking.</p>
+    <ul>
+      <li><code>READ_STEPS</code> is used for foreground step display and smart pause.</li>
+      <li><code>READ_HEALTH_DATA_IN_BACKGROUND</code> is optional and used only for closed-app smart pause and widget refreshes.</li>
+      <li>Google Fit data can be included when Google Fit is connected to Health Connect.</li>
+      <li>Tomi does not request write access and does not create, modify, or delete Health Connect records.</li>
+      <li>Tomi does not read location, routes, heart rate, weight, or other health record types.</li>
+    </ul>
+    <p>Health Connect source records remain controlled by Health Connect and their original apps. Clearing Tomi does not delete those source records.</p>
+  </section>
+
+  <section>
+    <h2>Network access</h2>
+    <p>The Play Store edition does not include Tomi's APK self-updater. The direct-download edition can contact GitHub to check for a new Tomi release and download a published APK. It verifies the download against the release's SHA-256 checksum, and Android verifies the APK signature before installation. Installation always requires your confirmation.</p>
+    <p>No analytics, advertising, account, or cloud-sync service is used. Tomi does not transmit tasks, journal text, mood, water, movement history, or cached step totals.</p>
+  </section>
+
+  <section>
+    <h2>Permissions</h2>
+    <ul>
+      <li><strong>Notifications:</strong> movement alarms and, in the direct edition, update notices.</li>
+      <li><strong>Exact alarms:</strong> optional; improves reminder timing. Inexact alarms are used when it is not granted.</li>
+      <li><strong>Boot completed:</strong> restores reminder scheduling after restart, app replacement, clock changes, or timezone changes.</li>
+      <li><strong>Vibration:</strong> optional movement-alarm feedback.</li>
+      <li><strong>Install unknown apps:</strong> direct edition only; required solely for in-app APK updates.</li>
+      <li><strong>Internet:</strong> direct edition only; release checks and downloads.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Retention, deletion, and export</h2>
+    <p>Tomi retains local data until you delete individual items, import a replacement backup, clear all Tomi data, or uninstall the app. Settings → Data &amp; privacy → Clear all data deletes the local database, preferences, reminder schedule, pending update work, notifications, and downloaded update files.</p>
+    <p>Files you export yourself are controlled by you and are not deleted by Tomi. Health Connect source records are outside Tomi's local deletion scope. You can revoke permissions at any time in Android Settings or Health Connect.</p>
+  </section>
+
+  <section>
+    <h2>Security</h2>
+    <p>Tomi uses Android app-private storage, parameterized Room queries, bounded backup imports, read-only Health Connect access, HTTPS release downloads, checksum verification, and Android package-signature verification. No security system is perfect; report suspected vulnerabilities privately through GitHub.</p>
+  </section>
+
+  <section>
+    <h2>Children</h2>
+    <p>Tomi is not directed to children under 13 and should not be used to collect health data from children.</p>
+  </section>
+
+  <section>
+    <h2>Changes to this policy</h2>
+    <p>The public URL for this policy is <a href="https://okyssta.github.io/Tomi/privacy.html">okyssta.github.io/Tomi/privacy.html</a>. Material changes will update the effective date and version above. Repository history is available at <a href="https://github.com/okyssta/Tomi">github.com/okyssta/Tomi</a>.</p>
+  </section>
+
+  <footer>Last updated 25 November 2026.</footer>
+</body>
+</html>

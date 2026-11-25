@@ -16,4 +16,10 @@ object StepSyncPlanner {
         require(count > 0)
         return (count - 1 downTo 0).map { today.minusDays(it.toLong()) }
     }
+
+    fun queryEnd(date: LocalDate, today: LocalDate, start: Instant, endExclusive: Instant, now: Instant): Instant? {
+        if (date != today) return endExclusive
+        if (!now.isAfter(start)) return null
+        return minOf(endExclusive, now)
+    }
 }

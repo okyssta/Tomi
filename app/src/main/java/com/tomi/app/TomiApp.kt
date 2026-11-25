@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import com.tomi.app.BuildConfig
 import com.tomi.app.data.settings.SettingsRepository
 import com.tomi.app.reminder.MovementDetectionReceiver
 import com.tomi.app.reminder.ReminderNotifier
@@ -31,7 +32,7 @@ class TomiApp : Application() {
             registerReceiver(MovementDetectionReceiver(), filter)
         }
         ReminderWorker.enqueue(this)
-        UpdateCheckScheduler.scheduleDaily(this)
+        if (BuildConfig.UPDATES_ENABLED) UpdateCheckScheduler.scheduleDaily(this)
         scope.launch {
             ReminderScheduler(
                 this@TomiApp,

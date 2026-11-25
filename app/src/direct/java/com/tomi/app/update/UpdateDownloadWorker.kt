@@ -11,53 +11,82 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
+import androidx.work.workDataOf
 import androidx.work.WorkerParameters
 import com.tomi.app.R
+import com.tomi.app.BuildConfig
 import com.tomi.app.reminder.ReminderNotifier
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CancellationException
 
 class UpdateDownloadWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = createForegroundInfo(0)
+
     override suspend fun doWork(): Result {
         val apkUrl = inputData.getString(KEY_APK_URL) ?: return Result.failure()
         val apkAssetName = inputData.getString(KEY_APK_ASSET_NAME) ?: return Result.failure()
         val checksumUrl = inputData.getString(KEY_CHECKSUM_URL) ?: return Result.failure()
         val version = inputData.getString(KEY_VERSION) ?: return Result.failure()
-        if (!apkUrl.startsWith("https://github.com/") ||
-            !checksumUrl.startsWith("https://github.com/") ||
-            !Regex("^[A-Za-z0-9._-]+$").matches(apkAssetName)
+        if (!GitHubReleaseUrls.isAllowed(apkUrl, BuildConfig.GITHUB_REPOSITORY) ||
+            !GitHubReleaseUrls.isAllowed(checksumUrl, BuildConfig.GITHUB_REPOSITORY) ||
+            !Regex("^[A-Za-z0-9._-]+$").matches(apkAssetName) ||
+            !Regex("^[A-Za-z0-9._-]+$").matches(version)
         ) {
             return Result.failure()
         }
-        val directory = File(applicationContext.cacheDir, "updates").apply { mkdirs() }
+        val directory = File(applicationContext.cacheDir, "updates")
         val apk = File(directory, "tomi-$version.apk")
-        val checksum = File(directory, "SHA256SUMS-$version.txt")
+        var apkTemporary: File? = null
+        var checksumTemporary: File? = null
+        var completed = false
 
         return try {
+            apkTemporary = DownloadPolicy.newTemporaryFile(directory, version, "apk")
+            checksumTemporary = DownloadPolicy.newTemporaryFile(directory, version, "checksum")
             setForeground(createForegroundInfo(0))
-            downloadToFile(checksumUrl, checksum) { }
-            val checksumContent = checksum.readText()
-            downloadToFile(apkUrl, apk) { progress ->
+            downloadToFile(checksumUrl, checksumTemporary, DownloadPolicy.MAX_CHECKSUM_BYTES) { }
+            val checksumContent = checksumTemporary.readText()
+            downloadToFile(apkUrl, apkTemporary, DownloadPolicy.MAX_APK_BYTES) { progress ->
                 setForeground(createForegroundInfo(progress))
             }
-            if (!ApkVerifier.verify(apk, checksumContent, apkAssetName)) {
-                apk.delete()
+            if (!ApkVerifier.verify(apkTemporary, checksumContent, apkAssetName)) {
                 error("Downloaded APK checksum did not match")
             }
-            checksum.delete()
+            if (!ApkIdentityVerifier.verify(applicationContext, apkTemporary, BuildConfig.APPLICATION_ID, version)) {
+                error("Downloaded APK identity or signature did not match")
+            }
+            checksumTemporary.delete()
+            DownloadPolicy.promote(apkTemporary, apk)
             showReadyToInstall(apk, version)
-            Result.success()
+            completed = true
+            Result.success(workDataOf(KEY_VERSION to version))
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
-            apk.delete()
-            Result.failure()
+            Result.failure(workDataOf(KEY_VERSION to version))
+        } finally {
+            if (!completed) {
+                checksumTemporary?.delete()
+                apkTemporary?.delete()
+            }
         }
     }
 
     private fun createForegroundInfo(progress: Int): ForegroundInfo {
+        NotificationManagerCompat.from(applicationContext).createNotificationChannel(
+            NotificationChannel(
+                ReminderNotifier.CHANNEL_UPDATES,
+                applicationContext.getString(R.string.channel_updates_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = applicationContext.getString(R.string.channel_updates_description)
+            },
+        )
         val notification = NotificationCompat.Builder(applicationContext, ReminderNotifier.CHANNEL_UPDATES)
             .setSmallIcon(R.drawable.ic_stat_tomi)
             .setContentTitle(applicationContext.getString(R.string.update_downloading_title))
@@ -93,19 +122,26 @@ class UpdateDownloadWorker(
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        manager.notify(
-            NOTIFICATION_READY,
-            NotificationCompat.Builder(applicationContext, ReminderNotifier.CHANNEL_UPDATES)
-                .setSmallIcon(R.drawable.ic_stat_tomi)
-                .setContentTitle(applicationContext.getString(R.string.update_ready_title, version))
-                .setContentText(applicationContext.getString(R.string.update_ready_text))
-                .setContentIntent(installIntent)
-                .setAutoCancel(true)
-                .build(),
-        )
+        runCatching {
+            manager.notify(
+                NOTIFICATION_READY,
+                NotificationCompat.Builder(applicationContext, ReminderNotifier.CHANNEL_UPDATES)
+                    .setSmallIcon(R.drawable.ic_stat_tomi)
+                    .setContentTitle(applicationContext.getString(R.string.update_ready_title, version))
+                    .setContentText(applicationContext.getString(R.string.update_ready_text))
+                    .setContentIntent(installIntent)
+                    .setAutoCancel(true)
+                    .build(),
+            )
+        }
     }
 
-    private suspend fun downloadToFile(url: String, destination: File, onProgress: suspend (Int) -> Unit) {
+    private suspend fun downloadToFile(
+        url: String,
+        destination: File,
+        maximumBytes: Long,
+        onProgress: suspend (Int) -> Unit,
+    ) {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 20_000
@@ -122,8 +158,8 @@ class UpdateDownloadWorker(
                     while (true) {
                         val read = input.read(buffer)
                         if (read < 0) break
+                        downloaded = DownloadPolicy.acceptedSize(downloaded + read, maximumBytes)
                         output.write(buffer, 0, read)
-                        downloaded += read
                         val percent = ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
                         if (percent != lastPercent) {
                             lastPercent = percent
@@ -141,7 +177,7 @@ class UpdateDownloadWorker(
         const val KEY_APK_URL = "apk_url"
         const val KEY_APK_ASSET_NAME = "apk_asset_name"
         const val KEY_CHECKSUM_URL = "checksum_url"
-        const val KEY_VERSION = "version"
+        const val KEY_VERSION = UpdateDownloadScheduler.KEY_VERSION
         private const val NOTIFICATION_DOWNLOAD = 4001
         private const val NOTIFICATION_READY = 4002
     }

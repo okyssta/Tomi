@@ -2,37 +2,72 @@
 
 Verification is recorded here only after the corresponding command or artifact check actually runs.
 
-## Automated checks
+## Current candidate: 1.1.0 (version code 1001000)
+
+### Automated checks
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Unit, Room, update, and Compose UI tests | `./gradlew :app:testDebugUnitTest` | Passed: 54 tests, 0 failures, 0 errors, 0 skipped |
-| Android lint | `./gradlew :app:lintDebug` | Passed |
-| Release lint | `./gradlew :app:lintRelease` | Passed |
-| Workflow syntax | `actionlint -color` | Passed |
-| Debug APK | `./gradlew :app:assembleDebug` | Passed |
-| APK signature | `apksigner verify --verbose --print-certs app-debug.apk` | Passed for debug APK |
-| Release APK | `./gradlew :app:assembleRelease -PVERSION_CODE=1000000 -PVERSION_NAME=1.0.0` | Passed |
-| GitHub CI | GitHub Actions `ci.yml`, run `45457678152` at `edc2af8` | Passed |
-| CodeQL | GitHub Actions `codeql.yml`, run `45456824882` at `1ef6293` | Passed |
-| Signed GitHub release | GitHub Actions `release.yml`, run `45457930601` | Passed and published |
+| Direct-flavor unit, Room, update, and Compose UI tests | `./gradlew :app:testDirectDebugUnitTest` | Passed: 179 tests, 0 failures, 0 errors, 0 skipped |
+| Play-flavor unit, Room, update, and Compose UI tests | `./gradlew :app:testPlayDebugUnitTest` | Passed: 175 tests, 0 failures, 0 errors, 0 skipped |
+| Direct debug lint | `./gradlew :app:lintDirectDebug` | Passed |
+| Play debug lint | `./gradlew :app:lintPlayDebug` | Passed |
+| Direct release lint | `./gradlew :app:lintDirectRelease` | Passed |
+| Play release lint | `./gradlew :app:lintPlayRelease` | Passed |
+| Workflow syntax | `actionlint v1.7.12` | Passed for CI, release, Pages, and CodeQL workflows |
+| Signed direct APK | `./gradlew :app:assembleDirectRelease -PVERSION_CODE=1001000 -PVERSION_NAME=1.1.0` | Passed |
+| Signed Play AAB | `./gradlew :app:bundlePlayRelease -PVERSION_CODE=1001000 -PVERSION_NAME=1.1.0` | Passed |
+| Published-asset verifier | `scripts/verify-release.sh` | Negative CLI tests pass for `v0.0.0`, regressed version codes, and a tampered Bundletool jar; remote 1.1.0 verification pending publication |
+
+Raw JUnit XML, lint text reports, test totals, artifact metadata, and hashes are collected under `dist/evidence/` by `dist/collect_evidence.py`.
+
+### Release-policy and publication evidence
+
+- `bash scripts/test-verify-release.sh` passed. It proves `v0.0.0` and version-code regressions are rejected before download, and a Bundletool jar with the wrong SHA-256 is rejected before Java executes it.
+- The release workflow explicitly compares both APK and AAB signer digests with the pinned certificate.
+- `.github/workflows/pages.yml` stages only `docs/privacy.html` and includes a retrying HTTP 200 post-deploy gate.
+- The canonical URL `https://okyssta.github.io/Tomi/privacy.html` returned **HTTP 404** on this host. GitHub Pages has not been enabled or deployment-verified here, so publication is not claimed.
+
+### Local artifact identity
+
+```text
+fe0e0437bb6182b32617f1cce2d48217c0de6a9155374b3863a30f08dceb9c14  tomi-release.apk
+b9f95c520be317e6240be673b07cbff34bad5e4faebd671c065b7a55421adfc0  tomi-release.aab
+bb9ed2395832cde40683228dccda18a275c36413940efd474e3a1ae7d8c97f36  mapping.txt
+b927216844897974b67bf6211a2edebb10abee86bbc106cedf9fce1acf9d85b0  mapping-play.txt
+```
+
+- APK size: 10,885,435 bytes.
+- AAB size: 10,140,211 bytes.
+- Package: `com.tomi.app`; version `1.1.0`; version code `1001000`.
+- Minimum SDK 26; target/compile SDK 36.
+- APK Signature Scheme v2; one 4096-bit RSA signer.
+- Signing certificate SHA-256: `fee392206a600443c5ad6fa469a81e44dc378bd651d41971c8f888f6bdf935d8`.
+- `apksigner verify`, AAB `jarsigner -verify`, and APK 16 KB `zipalign -c -P 16 4` passed.
+- The Play AAB contains no direct updater worker, notifier, installer activity, installer permission, or foreground data-sync permission.
+- The direct APK contains the updater and its installer-only permissions.
+
+### Correctness coverage added for the polished release
+
+- Configurable reminder start/end boundaries, inactive days, ten-minute snooze timing, manifest clock-change routing, boot/time catch-up, repeated alarm delivery, and alarm-channel migration.
+- DST gap/fold handling, backward-clock normalization, reminder delivery locking, Health Connect current-day query clamping, and monotonic smart-pause checkpoints.
+- Local-midnight date rollover and external-route allowlisting.
+- UTC task date-picker conversion and task due-date removal.
+- Bounded symmetric backup input/output, safe AUTOINCREMENT IDs, field validation, duplicate IDs, restore ordering, rollback, cancellation, and scheduler-failure behavior.
+- Direct update URL validation, size limits, package/version/signing identity, persisted retry metadata, nonterminal/terminal WorkManager state, unique temporary files, and atomic promotion.
+- Compose recreation restoration, save-failure draft retention, narrow Home quick actions, named toggles, page indicators, chart summary, mood labels, slider semantics, and license assets.
 
 ## Runtime limits
 
-The build host is ARM64 and has no `/dev/kvm` and no attached Android device. A full Android emulator was not used. UI behavior is covered by a Compose/Robolectric onboarding test; notification delivery, Health Connect permission screens, package installation, and real step sensor data still require physical-device verification.
+The build host is ARM64 and has no `/dev/kvm` and no attached Android device. A full Android emulator was not used. Compose/Robolectric tests cover UI semantics and editor behavior; notification delivery, Health Connect permission screens, package installation, and real step sensor data still require physical-device verification.
 
-## Artifact identity
+The host's Robolectric native SQLite runtime is unsupported on Linux ARM64. DAO tests therefore use `BundledSQLiteDriver`; production Room uses Android framework SQLite, and backup restore ordering is tested as a pure coroutine coordinator. This distinction is intentional and documented in `docs/DEVELOPMENT.md`.
 
-Local artifacts verified on the ARM64 build host:
+## Play readiness limits
 
-```text
-debug  25cc4237990265ce5c2f9dd7e4a098c1399ccfc51d0103c5c8085b29210461aa  app-debug.apk
-release 3fe637219f2146e7cf4473f78ddd8b19dd1a0117363d2bdae2a5ca7bcc1dd1fa  app-release.apk
-```
+A signed Play AAB and store icon/feature graphic exist. Google Play production submission is **not** claimed complete: Play App Signing, Console declarations, real screenshots, physical-device QA, pre-launch report, and staged rollout remain manual gates. See `docs/STORE.md`.
 
-The release APK reports package `com.tomi.app`, version code `1000000`, version name `1.0.0`, minimum SDK 26, and target SDK 36. `apksigner` verified APK Signature Scheme v2 with one 4096-bit RSA signer (certificate SHA-256 `fee392206a600443c5ad6fa469a81e44dc378bd651d41971c8f888f6bdf935d8`).
-
-## Published release verification
+## Historical published baseline: 1.0.0
 
 Release: <https://github.com/okyssta/Tomi/releases/tag/v1.0.0>
 
@@ -42,4 +77,4 @@ Release: <https://github.com/okyssta/Tomi/releases/tag/v1.0.0>
 - `sha256sum --check SHA256SUMS.txt` passed from the downloaded asset directory.
 - Published `tomi-release.apk` SHA-256: `6891addce1a52fb00afc0cce2dff8208b685f1087d69af15be824ec5c30a3efb`.
 - The downloaded APK passed `apksigner verify` and reported the expected package, version, and SDK levels.
-- The published APK hash differs from the local build hash; these two build environments did not produce byte-identical APKs. Both verify with the same signing certificate.
+- The published APK hash differs from the local build hash because the two build environments did not produce byte-identical APKs. Both verify with the same signing certificate.

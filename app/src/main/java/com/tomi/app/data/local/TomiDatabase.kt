@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 
 @Database(
@@ -38,7 +37,6 @@ abstract class TomiDatabase : RoomDatabase() {
                     TomiDatabase::class.java,
                     context.applicationContext.getDatabasePath("tomi.db").absolutePath,
                 )
-                    .setDriver(BundledSQLiteDriver())
                     .setQueryCoroutineContext(Dispatchers.IO)
                     .build()
                     .also { instance = it }

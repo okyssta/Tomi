@@ -2,6 +2,9 @@ package com.tomi.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +38,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -80,6 +90,7 @@ fun OnboardingScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -113,7 +124,13 @@ fun OnboardingScreen(
                             onValueChange = { interval = it.toInt() },
                             valueRange = 30f..45f,
                             steps = 14,
-                            modifier = Modifier.padding(horizontal = 24.dp),
+                            modifier = Modifier
+                                .padding(horizontal = 24.dp)
+                                .semantics {
+                                    contentDescription = "Reminder interval"
+                                    stateDescription = "$interval minutes"
+                                    progressBarRangeInfo = ProgressBarRangeInfo(interval.toFloat(), 30f..45f)
+                                },
                         )
                     }
                 }
@@ -125,17 +142,33 @@ fun OnboardingScreen(
                 pages.indices.forEach { index ->
                     Box(
                         Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
-                            .background(
-                                if (index == pagerState.currentPage) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            ),
-                    )
+                            .size(48.dp)
+                            .selectable(
+                                selected = index == pagerState.currentPage,
+                                role = Role.RadioButton,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                            )
+                            .clearAndSetSemantics {
+                                contentDescription = buildString {
+                                    append("Page ${index + 1} of ${pages.size}")
+                                    if (index == pagerState.currentPage) append(", selected")
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (index == pagerState.currentPage) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                ),
+                        )
+                    }
                 }
             }
             Row(

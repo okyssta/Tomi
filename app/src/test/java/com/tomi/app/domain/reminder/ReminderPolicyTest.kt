@@ -80,6 +80,17 @@ class ReminderPolicyTest {
     }
 
     @Test
+    fun `uses the configured start and end times for interval boundaries`() {
+        val customWindow = settings.copy(activeStartMinutes = 10 * 60, activeEndMinutes = 16 * 60 + 15)
+        val beforeStart = at("2026-11-23T09:00:00")
+        val afterEnd = at("2026-11-23T16:10:00")
+        val lastMovement = Instant.parse("2026-11-23T15:50:00Z")
+
+        assertEquals(at("2026-11-23T10:00:00"), ReminderPolicy.nextReminderAt(beforeStart, null, customWindow))
+        assertEquals(at("2026-11-24T10:00:00"), ReminderPolicy.nextReminderAt(afterEnd, lastMovement, customWindow))
+    }
+
+    @Test
     fun `disabled reminders have no next occurrence`() {
         val now = at("2026-11-23T10:10:00")
 
@@ -123,6 +134,81 @@ class ReminderPolicyTest {
         val next = ReminderPolicy.nextReminderAt(now, null, settings, snoozeUntil)
 
         assertEquals(at("2026-11-23T10:50:00"), next)
+    }
+
+    @Test
+    fun `snooze cannot move a reminder outside active hours`() {
+        val now = at("2026-11-23T17:55:00")
+        val snoozeUntil = Instant.parse("2026-11-23T18:05:00Z")
+
+        val next = ReminderPolicy.nextReminderAt(now, null, settings, snoozeUntil)
+
+        assertEquals(at("2026-11-24T09:00:00"), next)
+    }
+
+    @Test
+    fun `snooze cannot move a reminder onto an inactive day`() {
+        val now = at("2026-11-22T23:55:00") // Sunday
+        val snoozeUntil = Instant.parse("2026-11-23T00:05:00Z")
+
+        val next = ReminderPolicy.nextReminderAt(now, null, settings, snoozeUntil)
+
+        assertEquals(at("2026-11-23T09:00:00"), next)
+    }
+
+    @Test
+    fun `future movement history is clamped after the clock moves backward`() {
+        val now = at("2026-11-23T10:00:00")
+        val futureMovement = Instant.parse("2026-11-23T12:00:00Z")
+
+        val next = ReminderPolicy.nextReminderAt(now, futureMovement, settings)
+
+        assertEquals(at("2026-11-23T10:40:00"), next)
+    }
+
+    @Test
+    fun `gap shifted start cannot create an inverted active window`() {
+        val zone = ZoneId.of("America/New_York")
+        val settings = ReminderSettings(
+            activeStartMinutes = 2 * 60 + 45,
+            activeEndMinutes = 3 * 60 + 15,
+            activeDays = setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY),
+        )
+        val now = ZonedDateTime.of(2026, 3, 8, 1, 50, 0, 0, zone)
+
+        val next = ReminderPolicy.nextReminderAt(now, null, settings)
+
+        assertEquals(ZonedDateTime.of(2026, 3, 9, 2, 45, 0, 0, zone), next)
+    }
+
+    @Test
+    fun `snooze uses the gap shifted end boundary`() {
+        val zone = ZoneId.of("America/New_York")
+        val settings = ReminderSettings(
+            activeStartMinutes = 60,
+            activeEndMinutes = 2 * 60 + 30,
+            activeDays = setOf(DayOfWeek.SUNDAY),
+        )
+        val now = ZonedDateTime.of(2026, 3, 8, 1, 50, 0, 0, zone)
+        val snoozeUntil = Instant.parse("2026-03-08T07:15:00Z") // 03:15 EDT
+
+        val next = ReminderPolicy.nextReminderAt(now, null, settings, snoozeUntil)
+
+        assertEquals(snoozeUntil.atZone(zone), next)
+    }
+
+    @Test
+    fun `active check uses the same resolved fold boundary as scheduling`() {
+        val zone = ZoneId.of("America/New_York")
+        val settings = ReminderSettings(
+            activeStartMinutes = 60,
+            activeEndMinutes = 90,
+            activeDays = setOf(DayOfWeek.SUNDAY),
+        )
+        val secondOneTwenty = ZonedDateTime.of(2026, 11, 1, 1, 20, 0, 0, zone)
+            .withLaterOffsetAtOverlap()
+
+        org.junit.Assert.assertFalse(ReminderPolicy.isActiveAt(secondOneTwenty, settings))
     }
 
     private fun at(value: String): ZonedDateTime = LocalDateTime.parse(value).atZone(zone)

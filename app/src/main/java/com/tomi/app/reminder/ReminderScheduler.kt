@@ -9,6 +9,7 @@ import com.tomi.app.data.settings.SettingsRepository
 import com.tomi.app.domain.reminder.ReminderPolicy
 import com.tomi.app.widget.TomiWidget
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.ZoneId
 
@@ -19,7 +20,11 @@ class ReminderScheduler(
 ) {
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
 
-    suspend fun reschedule(now: Instant = Instant.now()) {
+    suspend fun reschedule(now: Instant = Instant.now()) = ReminderSchedulerLock.mutex.withLock {
+        rescheduleLocked(now)
+    }
+
+    private suspend fun rescheduleLocked(now: Instant) {
         val settings = settingsRepository.settings.first()
         val runtime = settingsRepository.runtime.first()
         val baseline = listOfNotNull(runtime.lastMovementAt, runtime.lastReminderAt).maxOrNull()
@@ -31,7 +36,7 @@ class ReminderScheduler(
         )
 
         if (next == null) {
-            cancel()
+            cancelLocked()
             settingsRepository.updateRuntime { it.copy(nextReminderAt = null) }
             runCatching { TomiWidget().updateAll(context) }
             return
@@ -42,32 +47,57 @@ class ReminderScheduler(
         runCatching { TomiWidget().updateAll(context) }
     }
 
-    suspend fun onAlarm(now: Instant = Instant.now()) {
+    suspend fun onClockChanged(now: Instant = Instant.now()) = MovementCheckpointLock.mutex.withLock {
+        val nowMillis = now.toEpochMilli()
+        settingsRepository.updateRuntime { current ->
+            current.copy(
+                lastMovementAt = current.lastMovementAt?.coerceAtMost(nowMillis),
+                snoozeUntil = current.snoozeUntil?.coerceAtMost(nowMillis),
+                lastReminderAt = current.lastReminderAt?.coerceAtMost(nowMillis),
+                nextReminderAt = current.nextReminderAt?.coerceAtMost(nowMillis),
+            )
+        }
+        ReminderSchedulerLock.mutex.withLock { rescheduleLocked(now) }
+    }
+
+    suspend fun onAlarm(now: Instant = Instant.now()) = ReminderSchedulerLock.mutex.withLock {
+        onAlarmLocked(now)
+    }
+
+    private suspend fun onAlarmLocked(now: Instant) {
         val settings = settingsRepository.settings.first()
         val runtime = settingsRepository.runtime.first()
         if (!settings.reminder.enabled || settings.reminder.activeDays.isEmpty()) {
-            cancel()
+            cancelLocked()
             settingsRepository.updateRuntime { it.copy(nextReminderAt = null) }
+            return
+        }
+        if (!ReminderPolicy.isActiveAt(now.atZone(ZoneId.systemDefault()), settings.reminder)) {
+            rescheduleLocked(now)
             return
         }
 
         val scheduledFor = runtime.nextReminderAt
         if (scheduledFor != null && now.toEpochMilli() < scheduledFor - 30_000L) {
-            reschedule(now)
+            rescheduleLocked(now)
             return
         }
-        val lastShown = runtime.lastReminderAt
-        if (lastShown != null && now.toEpochMilli() - lastShown < 5 * 60_000L) {
-            reschedule(now)
+        val nowMillis = now.toEpochMilli()
+        if (runtime.lastReminderAt != null && runtime.lastReminderAt > nowMillis) {
+            settingsRepository.updateRuntime { it.copy(lastReminderAt = nowMillis) }
+        }
+        val lastShown = runtime.lastReminderAt?.coerceAtMost(nowMillis)
+        if (lastShown != null && nowMillis - lastShown < 5 * 60_000L) {
+            rescheduleLocked(now)
             return
         }
 
         notifier.showMovementReminder(settings.reminder)
-        settingsRepository.updateRuntime { it.copy(lastReminderAt = now.toEpochMilli()) }
-        reschedule(now)
+        settingsRepository.updateRuntime { it.copy(lastReminderAt = nowMillis) }
+        rescheduleLocked(now)
     }
 
-    suspend fun checkAndNotifyIfDue(now: Instant = Instant.now()) {
+    suspend fun checkAndNotifyIfDue(now: Instant = Instant.now()) = ReminderSchedulerLock.mutex.withLock {
         val settings = settingsRepository.settings.first()
         val runtime = settingsRepository.runtime.first()
         val baseline = listOfNotNull(runtime.lastMovementAt, runtime.lastReminderAt).maxOrNull()
@@ -78,21 +108,27 @@ class ReminderScheduler(
             snoozeUntil = runtime.snoozeUntil?.let(Instant::ofEpochMilli),
         )
         if (next != null && !next.toInstant().isAfter(now)) {
-            onAlarm(now)
+            onAlarmLocked(now)
         } else {
-            reschedule(now)
+            rescheduleLocked(now)
         }
     }
 
-    suspend fun snooze(minutes: Int = 10) {
+    suspend fun snooze(minutes: Int = 10) = ReminderSchedulerLock.mutex.withLock {
         require(minutes in 1..60)
-        val until = Instant.now().plusSeconds(minutes * 60L)
+        val now = Instant.now()
+        val until = now.plusSeconds(minutes * 60L)
         settingsRepository.updateRuntime { it.copy(snoozeUntil = until.toEpochMilli()) }
-        reschedule(until)
+        // Evaluate from the request time so the future snooze occurrence is selected.
+        rescheduleLocked(now)
         notifier.cancelMovementReminder()
     }
 
-    fun cancel() {
+    suspend fun cancel() = ReminderSchedulerLock.mutex.withLock {
+        cancelLocked()
+    }
+
+    private fun cancelLocked() {
         alarmManager?.cancel(reminderIntent())
     }
 

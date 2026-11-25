@@ -8,15 +8,15 @@
 - Kotlin 2.1.20
 - compile/target SDK 36, minimum SDK 26
 
-The dependency stack is pinned for reproducible builds. Dependabot proposes minor and patch updates; major toolchain changes should be reviewed separately.
+The dependency stack is pinned for reproducible builds. Automated Gradle Dependabot PRs are paused until the dependency tree is stable; GitHub Actions updates remain enabled.
 
 ## Tests
 
 ```sh
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew :app:testDirectDebugUnitTest :app:testPlayDebugUnitTest :app:lintDirectDebug :app:lintPlayDebug
 ```
 
-Room tests use `BundledSQLiteDriver`. On JVM test hosts, Gradle swaps the Android SQLite artifact for `sqlite-bundled-jvm`; this is necessary because Android's Bionic SQLite library cannot load in a desktop JVM.
+Room DAO tests use `BundledSQLiteDriver`. On JVM test hosts, Gradle swaps the Android SQLite artifact for `sqlite-bundled-jvm`; this is necessary because Android's Bionic SQLite library cannot load in a desktop JVM. Production Room uses the Android framework SQLite open helper so `withTransaction` has a `SupportSQLiteOpenHelper.Factory`; backup restore ordering and rollback are covered by `BackupRestoreCoordinatorTest` without requiring Android native SQLite in Robolectric.
 
 Compose UI tests use Robolectric. DAO tests disable the custom `TomiApp` application so WorkManager is not initialized by the test harness.
 

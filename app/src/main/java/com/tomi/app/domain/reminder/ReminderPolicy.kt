@@ -2,6 +2,8 @@ package com.tomi.app.domain.reminder
 
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 
 data class ReminderSettings(
@@ -36,25 +38,31 @@ object ReminderPolicy {
         snoozeUntil: Instant? = null,
     ): ZonedDateTime? {
         if (!settings.enabled || settings.activeDays.isEmpty()) return null
-        if (snoozeUntil != null && snoozeUntil.isAfter(now.toInstant())) {
-            return snoozeUntil.atZone(now.zone)
-        }
 
         val startToday = atMinute(now, settings.activeStartMinutes)
         val endToday = atMinute(now, settings.activeEndMinutes)
 
-        if (now.dayOfWeek !in settings.activeDays || now >= endToday) {
+        if (now.dayOfWeek !in settings.activeDays || now >= endToday || !startToday.isBefore(endToday)) {
             return nextActiveStart(now, settings)
         }
         if (now < startToday) return startToday
+        val snooze = snoozeUntil?.atZone(now.zone)
+        if (snooze != null && snooze.isAfter(now) && isActiveAt(snooze, settings)) {
+            return snooze
+        }
 
-        val candidate = lastMovementAt
-            ?.atZone(now.zone)
-            ?.plusMinutes(settings.intervalMinutes.toLong())
-            ?: now.plusMinutes(settings.intervalMinutes.toLong())
+        val baseline = lastMovementAt?.coerceAtMost(now.toInstant()) ?: now.toInstant()
+        val candidate = baseline.atZone(now.zone).plusMinutes(settings.intervalMinutes.toLong())
 
         val next = if (candidate < now) now else candidate
-        return if (next < endToday) next else nextActiveStart(now, settings)
+        return if (next < endToday && isActiveAt(next, settings)) next else nextActiveStart(now, settings)
+    }
+
+    fun isActiveAt(time: ZonedDateTime, settings: ReminderSettings): Boolean {
+        if (!settings.enabled || time.dayOfWeek !in settings.activeDays) return false
+        val start = atMinute(time, settings.activeStartMinutes)
+        val end = atMinute(time, settings.activeEndMinutes)
+        return start.isBefore(end) && !time.isBefore(start) && time.isBefore(end)
     }
 
     private fun nextActiveStart(now: ZonedDateTime, settings: ReminderSettings): ZonedDateTime? {
@@ -62,15 +70,17 @@ object ReminderPolicy {
         repeat(8) {
             date = date.plusDays(1)
             if (date.dayOfWeek in settings.activeDays) {
-                return date.atTime(settings.activeStartMinutes / 60, settings.activeStartMinutes % 60)
-                    .atZone(now.zone)
+                val start = atMinute(date, settings.activeStartMinutes, now.zone)
+                val end = atMinute(date, settings.activeEndMinutes, now.zone)
+                if (start.isBefore(end)) return start
             }
         }
         return null
     }
 
     private fun atMinute(now: ZonedDateTime, minuteOfDay: Int): ZonedDateTime =
-        now.toLocalDate()
-            .atTime(minuteOfDay / 60, minuteOfDay % 60)
-            .atZone(now.zone)
+        atMinute(now.toLocalDate(), minuteOfDay, now.zone)
+
+    private fun atMinute(date: LocalDate, minuteOfDay: Int, zone: ZoneId): ZonedDateTime =
+        date.atTime(minuteOfDay / 60, minuteOfDay % 60).atZone(zone)
 }

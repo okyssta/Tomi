@@ -1,12 +1,16 @@
 package com.tomi.app.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.net.toUri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -16,26 +20,33 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tomi.app.BuildConfig
 import com.tomi.app.data.settings.TomiSettings
 
 class PermissionsRationaleActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            TomiTheme(settings = TomiSettings()) { PermissionRationaleScreen { finish() } }
+            TomiTheme(settings = TomiSettings()) {
+                PermissionRationaleScreen(
+                    onDone = { finish() },
+                    onOpenPrivacy = { startActivity(Intent(Intent.ACTION_VIEW, BuildConfig.PRIVACY_POLICY_URL.toUri())) },
+                )
+            }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PermissionRationaleScreen(onDone: () -> Unit) {
+private fun PermissionRationaleScreen(onDone: () -> Unit, onOpenPrivacy: () -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text("Privacy & permissions") }) }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Why Tomi asks for step access", style = MaterialTheme.typography.headlineSmall)
@@ -54,6 +65,7 @@ private fun PermissionRationaleScreen(onDone: () -> Unit) {
             Text(
                 "You can revoke Health Connect, notification, exact alarm, or update-install permissions at any time in Android Settings. Export or clear your Tomi data from the app's Settings screen.",
             )
+            Button(onClick = onOpenPrivacy) { Text("Read privacy policy") }
             Button(onClick = onDone) { Text("Got it") }
         }
     }

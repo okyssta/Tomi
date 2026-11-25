@@ -3,6 +3,8 @@ package com.tomi.app.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -36,6 +38,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -43,34 +47,95 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tomi.app.data.local.TaskEntity
+import com.tomi.app.ui.components.ConfirmDeleteDialog
 import com.tomi.app.ui.TomiViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private enum class TaskFilter { ALL, OPEN, DONE }
+
+private data class PendingTaskDelete(val id: Long, val title: String) {
+    fun toSaveable(): List<Any> = listOf(id, title)
+
+    companion object {
+        fun fromSaveable(value: List<*>): PendingTaskDelete =
+            PendingTaskDelete(value[0] as Long, value[1] as String)
+    }
+}
+
+private val PendingTaskDeleteSaver: Saver<PendingTaskDelete?, Any> = Saver(
+    save = { it?.toSaveable() ?: false },
+    restore = { value ->
+        when (value) {
+            false -> null
+            is List<*> -> PendingTaskDelete.fromSaveable(value)
+            else -> error("Invalid pending task delete state")
+        }
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(viewModel: TomiViewModel) {
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
-    var query by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf(TaskFilter.ALL) }
-    var editorOpen by remember { mutableStateOf(false) }
-    var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
+    TasksScreen(
+        tasks = tasks,
+        onToggleTask = viewModel::toggleTask,
+        onSaveTask = viewModel::saveTask,
+        onDeleteTask = viewModel::deleteTask,
+        editorContent = { task, onDismiss, onSave, onDelete ->
+            TaskEditorSheet(task, onDismiss, onSave, onDelete)
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+private val DefaultTaskEditorContent: @Composable (TaskEntity, () -> Unit, (TaskEntity, (Boolean) -> Unit) -> Unit, (TaskEntity) -> Unit) -> Unit =
+    { task, onDismiss, onSave, onDelete -> TaskEditorSheet(task, onDismiss, onSave, onDelete) }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TasksScreen(
+    tasks: List<TaskEntity>,
+    onToggleTask: (TaskEntity) -> Unit,
+    onSaveTask: (TaskEntity, (Boolean) -> Unit) -> Unit,
+    onDeleteTask: (TaskEntity) -> Unit,
+    editorContent: @Composable (TaskEntity, () -> Unit, (TaskEntity, (Boolean) -> Unit) -> Unit, (TaskEntity) -> Unit) -> Unit = DefaultTaskEditorContent,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf(TaskFilter.ALL) }
+    var editingTaskId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingDelete by rememberSaveable(stateSaver = PendingTaskDeleteSaver) { mutableStateOf<PendingTaskDelete?>(null) }
+    var editorGeneration by remember { mutableStateOf(0L) }
+    val editingTask = when (editingTaskId) {
+        null -> null
+        0L -> TaskEntity(
+            title = "",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+        )
+        else -> tasks.firstOrNull { it.id == editingTaskId }
+    }
 
     val visibleTasks = tasks.filter { task ->
         val matchesQuery = query.isBlank() ||
@@ -91,22 +156,14 @@ fun TasksScreen(viewModel: TomiViewModel) {
                 title = { Text("Tasks") },
                 actions = {
                     IconButton(
-                        onClick = {
-                            val now = System.currentTimeMillis()
-                            editingTask = TaskEntity(title = "", createdAt = now, updatedAt = now)
-                            editorOpen = true
-                        },
+                        onClick = { editingTaskId = 0L; editorGeneration++ },
                     ) { Icon(Icons.Outlined.Add, contentDescription = "Add task") }
                 },
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = {
-                    val now = System.currentTimeMillis()
-                    editingTask = TaskEntity(title = "", createdAt = now, updatedAt = now)
-                    editorOpen = true
-                },
+                onClick = { editingTaskId = 0L; editorGeneration++ },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 text = { Text("Add task") },
             )
@@ -148,12 +205,9 @@ fun TasksScreen(viewModel: TomiViewModel) {
                     items(visibleTasks, key = { it.id }) { task ->
                         TaskRow(
                             task = task,
-                            onToggle = { viewModel.toggleTask(task) },
-                            onEdit = {
-                                editingTask = task
-                                editorOpen = true
-                            },
-                            onDelete = { viewModel.deleteTask(task) },
+                            onToggle = { onToggleTask(task) },
+                            onEdit = { editingTaskId = task.id; editorGeneration++ },
+                            onDelete = { pendingDelete = PendingTaskDelete(task.id, task.title) },
                         )
                     }
                 }
@@ -161,21 +215,37 @@ fun TasksScreen(viewModel: TomiViewModel) {
         }
     }
 
-    if (editorOpen) {
-        editingTask?.let { task ->
-            TaskEditorSheet(
-                task = task,
-                onDismiss = { editorOpen = false },
-                onSave = {
-                    viewModel.saveTask(it)
-                    editorOpen = false
-                },
-                onDelete = {
-                    viewModel.deleteTask(it)
-                    editorOpen = false
-                },
-            )
-        }
+    editingTask?.let { task ->
+        editorContent(
+            task,
+            { editingTaskId = null; editorGeneration++ },
+            { taskToSave, onSaved ->
+                val saveGeneration = editorGeneration
+                onSaveTask(taskToSave) { saved ->
+                    if (editorGeneration != saveGeneration) return@onSaveTask
+                    onSaved(saved)
+                    if (saved) editingTaskId = null
+                }
+            },
+            { taskToDelete ->
+                val deleteGeneration = editorGeneration
+                onDeleteTask(taskToDelete)
+                if (editorGeneration == deleteGeneration) editingTaskId = null
+            },
+        )
+    }
+    pendingDelete?.let { pending ->
+        val task = tasks.firstOrNull { it.id == pending.id }
+            ?: TaskEntity(id = pending.id, title = pending.title, createdAt = 0L, updatedAt = 0L)
+        ConfirmDeleteDialog(
+            title = "Delete task?",
+            message = "“${task.title}” will be permanently deleted.",
+            onConfirm = {
+                onDeleteTask(task)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
     }
 }
 
@@ -261,24 +331,28 @@ private fun EmptyTasksState(hasAnyTasks: Boolean, modifier: Modifier = Modifier)
         )
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun TaskEditorSheet(
+internal fun TaskEditorSheet(
     task: TaskEntity,
     onDismiss: () -> Unit,
-    onSave: (TaskEntity) -> Unit,
+    onSave: (TaskEntity, (Boolean) -> Unit) -> Unit,
     onDelete: (TaskEntity) -> Unit,
 ) {
-    var title by remember(task.id) { mutableStateOf(task.title) }
-    var notes by remember(task.id) { mutableStateOf(task.notes) }
-    var category by remember(task.id) { mutableStateOf(task.category) }
-    var priority by remember(task.id) { mutableStateOf(task.priority) }
+    var title by rememberSaveable(task.id) { mutableStateOf(task.title) }
+    var notes by rememberSaveable(task.id) { mutableStateOf(task.notes) }
+    var category by rememberSaveable(task.id) { mutableStateOf(task.category) }
+    var priority by rememberSaveable(task.id) { mutableIntStateOf(task.priority) }
     val initialDue = task.dueAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()) }
-    var dueDate by remember(task.id) { mutableStateOf(initialDue?.toLocalDate()) }
-    var dueTime by remember(task.id) { mutableStateOf(initialDue?.toLocalTime()) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
+    var dueDate by rememberSaveable(task.id) { mutableStateOf(initialDue?.toLocalDate()) }
+    var dueTime by rememberSaveable(task.id) { mutableStateOf(initialDue?.toLocalTime() ?: LocalTime.of(18, 0)) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var saveInFlight by remember { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -289,6 +363,7 @@ private fun TaskEditorSheet(
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SnackbarHost(snackbarHostState)
             Text(
                 text = if (task.id == 0L) "New task" else "Edit task",
                 style = MaterialTheme.typography.headlineSmall,
@@ -325,23 +400,35 @@ private fun TaskEditorSheet(
                 },
                 leadingContent = { Icon(Icons.Outlined.DateRange, contentDescription = null) },
                 trailingContent = {
-                    TextButton(onClick = { showDatePicker = true }) { Text("Choose") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (dueDate != null) {
+                            TextButton(
+                                onClick = { dueDate = null },
+                                modifier = Modifier.semantics { contentDescription = "Remove due date" },
+                            ) { Text("Clear") }
+                        }
+                        TextButton(
+                            onClick = { showDatePicker = true },
+                            modifier = Modifier.semantics { contentDescription = "Choose due date" },
+                        ) { Text("Choose") }
+                    }
                 },
             )
-            if (dueDate != null) {
-                ListItem(
-                    headlineContent = { Text("Due time") },
-                    supportingContent = {
-                        Text(dueTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "End of day")
-                    },
-                    leadingContent = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
-                    trailingContent = {
-                        TextButton(onClick = { showTimePicker = true }) { Text("Choose") }
-                    },
-                )
-            }
+            ListItem(
+                headlineContent = { Text("Due time") },
+                supportingContent = {
+                    Text(dueTime.format(DateTimeFormatter.ofPattern("HH:mm")))
+                },
+                leadingContent = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+                trailingContent = {
+                    TextButton(
+                        onClick = { showTimePicker = true },
+                        modifier = Modifier.semantics { contentDescription = "Choose due time" },
+                    ) { Text("Choose") }
+                },
+            )
             Text("Priority", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Low" to TaskEntity.PRIORITY_LOW, "Normal" to TaskEntity.PRIORITY_NORMAL, "High" to TaskEntity.PRIORITY_HIGH)
                     .forEach { (label, value) ->
                         FilterChip(
@@ -356,15 +443,18 @@ private fun TaskEditorSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (task.id != 0L) {
-                    TextButton(onClick = { onDelete(task) }) { Text("Delete") }
+                    TextButton(onClick = { showDeleteDialog = true }) { Text("Delete") }
                 }
                 Box(Modifier.weight(1f))
                 Button(
+                    enabled = title.isNotBlank() && !saving && !saveInFlight,
                     onClick = {
+                        if (saving || saveInFlight) return@Button
                         val dueAt = dueDate?.let { date ->
-                            val time = dueTime ?: LocalTime.of(23, 59)
-                            date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            date.atTime(dueTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                         }
+                        saving = true
+                        saveInFlight = true
                         onSave(
                             task.copy(
                                 title = title,
@@ -373,22 +463,42 @@ private fun TaskEditorSheet(
                                 priority = priority,
                                 dueAt = dueAt,
                             ),
-                        )
+                        ) { saved ->
+                            saving = false
+                            saveInFlight = false
+                            if (saved) {
+                                onDismiss()
+                            } else {
+                                scope.launch { snackbarHostState.showSnackbar("Could not save task. Your draft is still here.") }
+                            }
+                        }
                     },
-                ) { Text("Save") }
+                ) { Text(if (saving) "Saving…" else "Save") }
             }
         }
     }
 
+    if (showDeleteDialog) {
+        ConfirmDeleteDialog(
+            title = "Delete task?",
+            message = "“${task.title}” will be permanently deleted.",
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete(task)
+            },
+            onDismiss = { showDeleteDialog = false },
+        )
+    }
+
     if (showDatePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = dueDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli())
+        val state = rememberDatePickerState(initialSelectedDateMillis = dueDate?.let(TaskDueDate::toPickerMillis))
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(
                     onClick = {
                         state.selectedDateMillis?.let {
-                            dueDate = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                            dueDate = TaskDueDate.fromPickerMillis(it)
                         }
                         showDatePicker = false
                     },
@@ -400,8 +510,8 @@ private fun TaskEditorSheet(
 
     if (showTimePicker) {
         val state = rememberTimePickerState(
-            initialHour = dueTime?.hour ?: 18,
-            initialMinute = dueTime?.minute ?: 0,
+            initialHour = dueTime.hour,
+            initialMinute = dueTime.minute,
             is24Hour = true,
         )
         AlertDialog(

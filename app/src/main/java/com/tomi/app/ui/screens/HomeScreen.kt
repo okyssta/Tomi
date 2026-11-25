@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
@@ -38,12 +41,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tomi.app.data.local.MovementType
@@ -53,9 +60,9 @@ import com.tomi.app.domain.movement.MovementStreak
 import com.tomi.app.domain.reminder.ReminderPolicy
 import com.tomi.app.health.HealthStatus
 import com.tomi.app.ui.TomiViewModel
+import com.tomi.app.ui.StepSyncUiState
 import kotlinx.coroutines.delay
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -72,11 +79,14 @@ fun HomeScreen(
     val runtime by viewModel.runtime.collectAsStateWithLifecycle()
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val movements by viewModel.movements.collectAsStateWithLifecycle()
+    val dayContext by viewModel.dayContext.collectAsStateWithLifecycle()
     val todayMovements by viewModel.todayMovements.collectAsStateWithLifecycle()
     val steps by viewModel.todaySteps.collectAsStateWithLifecycle()
     val waterMl by viewModel.waterMl.collectAsStateWithLifecycle()
+    val canUndoWater by viewModel.canUndoWater.collectAsStateWithLifecycle()
     val checkIn by viewModel.checkIn.collectAsStateWithLifecycle()
     val healthStatus by viewModel.healthStatus.collectAsStateWithLifecycle()
+    val stepSyncState by viewModel.stepSyncState.collectAsStateWithLifecycle()
     val now by produceState(initialValue = Instant.now()) {
         while (true) {
             value = Instant.now()
@@ -92,7 +102,7 @@ fun HomeScreen(
             snoozeUntil = runtime.snoozeUntil?.let(Instant::ofEpochMilli),
         )
     }
-    val today = LocalDate.now()
+    val today = dayContext.date
     val streak = remember(movements, today) {
         MovementStreak.calculate(
             movements.map { Instant.ofEpochMilli(it.startedAt).atZone(ZoneId.systemDefault()).toLocalDate() }.toSet(),
@@ -132,7 +142,9 @@ fun HomeScreen(
                     steps = steps,
                     goal = settings.stepGoal,
                     healthStatus = healthStatus,
+                    syncState = stepSyncState,
                     onConnectHealth = onConnectHealth,
+                    onRetrySteps = viewModel::refreshHealth,
                 )
             }
             item {
@@ -235,13 +247,14 @@ fun HomeScreen(
                         leadingContent = { Icon(Icons.Outlined.LocalDrink, contentDescription = null) },
                         trailingContent = {
                             Row {
-                                TextButton(onClick = viewModel::undoWater) { Text("Undo") }
+                                TextButton(onClick = viewModel::undoWater, enabled = canUndoWater) { Text("Undo") }
                                 Button(onClick = { viewModel.addWater() }) { Text("+250 ml") }
                             }
                         },
                     )
                     LinearProgressIndicator(
                         progress = { (waterMl.toFloat() / settings.waterGoalMl).coerceIn(0f, 1f) },
+                        drawStopIndicator = {},
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
@@ -258,7 +271,9 @@ private fun StepSummaryCard(
     steps: Long?,
     goal: Int,
     healthStatus: HealthStatus,
+    syncState: StepSyncUiState,
     onConnectHealth: () -> Unit,
+    onRetrySteps: () -> Unit,
 ) {
     Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -281,6 +296,7 @@ private fun StepSummaryCard(
             )
             LinearProgressIndicator(
                 progress = { ((steps ?: 0L).toFloat() / goal).coerceIn(0f, 1f) },
+                drawStopIndicator = {},
                 modifier = Modifier.fillMaxWidth(),
             )
             if (healthStatus != HealthStatus.AVAILABLE_GRANTED) {
@@ -290,6 +306,13 @@ private fun StepSummaryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(onClick = onConnectHealth) { Text("Connect steps") }
+            } else if (syncState is StepSyncUiState.Error) {
+                Text(
+                    text = (syncState as StepSyncUiState.Error).message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = onRetrySteps) { Text("Retry") }
             }
         }
     }
@@ -332,7 +355,9 @@ private fun ReminderCard(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onStartMovement) { Text("Start break") }
-                    TextButton(onClick = onSnooze) { Text("Snooze 10 min") }
+                    if (ReminderPolicy.isActiveAt(now.atZone(ZoneId.systemDefault()), settings.reminder)) {
+                        TextButton(onClick = onSnooze) { Text("Snooze 10 min") }
+                    }
                 }
             }
         }
@@ -340,15 +365,30 @@ private fun ReminderCard(
 }
 
 @Composable
-private fun QuickMovementButton(
+internal fun QuickMovementButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    FilledTonalButton(onClick = onClick, modifier = modifier) {
-        Icon(icon, contentDescription = null)
-        Text(label, modifier = Modifier.padding(start = 6.dp))
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 64.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(icon, contentDescription = "$label movement", modifier = Modifier.size(20.dp))
+            Text(
+                text = label,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
@@ -356,7 +396,7 @@ private fun QuickMovementButton(
 @Composable
 private fun MoodCheckInCard(mood: Int?, energy: Int?, onSave: (Int, Int, String) -> Unit) {
     var selectedMood by remember(mood) { mutableStateOf(mood) }
-    var selectedEnergy by remember(mood, energy) { mutableStateOf(energy ?: 3) }
+    var selectedEnergy by remember(mood, energy) { mutableIntStateOf(energy ?: 3) }
     Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -374,6 +414,7 @@ private fun MoodCheckInCard(mood: Int?, energy: Int?, onSave: (Int, Int, String)
                         selected = selectedMood == value,
                         onClick = { selectedMood = value },
                         label = { Text(emoji) },
+                        modifier = Modifier.semantics { contentDescription = moodChipLabel(value) },
                     )
                 }
             }
@@ -395,4 +436,9 @@ private fun MoodCheckInCard(mood: Int?, energy: Int?, onSave: (Int, Int, String)
             }
         }
     }
+}
+
+internal fun moodChipLabel(value: Int): String {
+    val label = listOf("very low", "low", "neutral", "good", "very good")[value - 1]
+    return "Mood $value, $label"
 }

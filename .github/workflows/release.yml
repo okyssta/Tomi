@@ -13,29 +13,48 @@ concurrency:
 
 jobs:
   release:
-    name: Build and publish signed APK
+    name: Build and publish signed APK and AAB
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      EXPECTED_CERT_SHA256: fee392206a600443c5ad6fa469a81e44dc378bd651d41971c8f888f6bdf935d8
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Validate version tag
         shell: bash
         run: |
-          VERSION_NAME="${GITHUB_REF_NAME#v}"
-          if [[ ! "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag must be vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease" >&2
-            exit 1
-          fi
           VERSION_CODE=$(python3 - <<'PY'
-          import os, re
-          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
-          core = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
-          major, minor, patch = map(int, core.groups())
-          print(major * 1_000_000 + minor * 1_000 + patch)
+          import os, re, subprocess
+          tag = os.environ["GITHUB_REF_NAME"]
+          match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", tag)
+          if not match:
+              raise SystemExit("Tag must be a stable vMAJOR.MINOR.PATCH tag")
+          major, minor, patch = map(int, match.groups())
+          if tag != f"v{major}.{minor}.{patch}":
+              raise SystemExit("Tag must use canonical vMAJOR.MINOR.PATCH form")
+          if not (0 <= major <= 999 and 0 <= minor <= 999 and 0 <= patch <= 999):
+              raise SystemExit("Version components must be between 0 and 999")
+          code = major * 1_000_000 + minor * 1_000 + patch
+          if code <= 0 or code > 2_100_000_000:
+              raise SystemExit("Derived versionCode is outside Android's supported range")
+          previous_codes = []
+          for previous in subprocess.check_output(["git", "tag", "--list"], text=True).splitlines():
+              if previous == tag:
+                  continue
+              old = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", previous)
+              if old:
+                  a, b, c = map(int, old.groups())
+                  previous_codes.append(a * 1_000_000 + b * 1_000 + c)
+          if previous_codes and code <= max(previous_codes):
+              raise SystemExit(f"versionCode {code} must be greater than all published versionCodes")
+          print(code)
           PY
           )
+          VERSION_NAME="${GITHUB_REF_NAME#v}"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
@@ -79,21 +98,66 @@ jobs:
 
       - name: Test, lint, and build signed release
         run: >-
-          ./gradlew testDebugUnitTest lintRelease assembleRelease
+          ./gradlew testDirectDebugUnitTest testPlayDebugUnitTest
+          lintDirectRelease lintPlayRelease
+          assembleDirectRelease bundlePlayRelease
           -PVERSION_CODE="$VERSION_CODE"
           -PVERSION_NAME="$VERSION_NAME"
           --stacktrace
+
+      - name: Validate APK/AAB identity and Play exclusions
+        shell: bash
+        run: |
+          APK=app/build/outputs/apk/direct/release/app-direct-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/apk-signature.txt"
+          APK_CERT="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signature.txt" | head -1 | tr -d ':\r' | tr '[:upper:]' '[:lower:]')"
+          test "$APK_CERT" = "$EXPECTED_CERT_SHA256"
+          curl -fsSLo "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
+          AAB=app/build/outputs/bundle/playRelease/app-play-release.aab
+          java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle="$AAB" > "$RUNNER_TEMP/aab-manifest.xml"
+          grep -q 'package="com.tomi.app"' "$RUNNER_TEMP/aab-manifest.xml"
+          grep -q "android:versionCode=\"$VERSION_CODE\"" "$RUNNER_TEMP/aab-manifest.xml"
+          grep -q "android:versionName=\"$VERSION_NAME\"" "$RUNNER_TEMP/aab-manifest.xml"
+          grep -q 'android:minSdkVersion="26"' "$RUNNER_TEMP/aab-manifest.xml"
+          grep -q 'android:targetSdkVersion="36"' "$RUNNER_TEMP/aab-manifest.xml"
+          if grep -q -E 'REQUEST_INSTALL_PACKAGES|FOREGROUND_SERVICE_DATA_SYNC|InstallUpdateActivity' "$RUNNER_TEMP/aab-manifest.xml"; then
+            echo "Play AAB contains a direct-update component or permission" >&2
+            exit 1
+          fi
+          AAB_CERT="$(keytool -printcert -jarfile "$AAB" | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':\r' | tr '[:upper:]' '[:lower:]')"
+          test "$AAB_CERT" = "$EXPECTED_CERT_SHA256"
+
+      - name: Verify published privacy policy
+        shell: bash
+        run: |
+          LOCAL_SHA256="$(sha256sum docs/privacy.html | cut -d ' ' -f 1)"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location --output "$RUNNER_TEMP/published-privacy.html" https://okyssta.github.io/Tomi/privacy.html; then
+              REMOTE_SHA256="$(sha256sum "$RUNNER_TEMP/published-privacy.html" | cut -d ' ' -f 1)"
+              if [[ "$REMOTE_SHA256" == "$LOCAL_SHA256" ]]; then
+                echo "Published privacy policy matches the release source"
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "Privacy policy publication is missing or stale" >&2
+          exit 1
 
       - name: Prepare release assets
         shell: bash
         run: |
           rm -rf dist
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/tomi-release.apk
-          cp app/build/outputs/mapping/release/mapping.txt dist/mapping.txt
+          cp app/build/outputs/apk/direct/release/app-direct-release.apk dist/tomi-release.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab dist/tomi-release.aab
+          cp app/build/outputs/mapping/directRelease/mapping.txt dist/mapping.txt
+          cp app/build/outputs/mapping/playRelease/mapping.txt dist/mapping-play.txt
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs dist/tomi-release.apk > dist/signature.txt
+          jarsigner -verify -verbose -certs dist/tomi-release.aab > dist/aab-signature.txt 2>&1
           cd dist
-          sha256sum tomi-release.apk mapping.txt signature.txt > SHA256SUMS.txt
+          sha256sum tomi-release.apk tomi-release.aab mapping.txt mapping-play.txt signature.txt aab-signature.txt > SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
 
       - name: Upload workflow artifacts
@@ -109,6 +173,6 @@ jobs:
         with:
           name: Tomi ${{ github.ref_name }}
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           files: dist/*
           fail_on_unmatched_files: true

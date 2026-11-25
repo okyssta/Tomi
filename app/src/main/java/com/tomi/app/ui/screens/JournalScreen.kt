@@ -31,7 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,16 +40,42 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tomi.app.data.local.JournalEntity
+import com.tomi.app.ui.components.ConfirmDeleteDialog
+import com.tomi.app.ui.components.SettingsToggleRow
 import com.tomi.app.ui.TomiViewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
+
+private data class PendingJournalDelete(val id: Long, val title: String) {
+    fun toSaveable(): List<Any> = listOf(id, title)
+
+    companion object {
+        fun fromSaveable(value: List<*>): PendingJournalDelete =
+            PendingJournalDelete(value[0] as Long, value[1] as String)
+    }
+}
+
+private val PendingJournalDeleteSaver: Saver<PendingJournalDelete?, Any> = Saver(
+    save = { it?.toSaveable() ?: false },
+    restore = { value ->
+        when (value) {
+            false -> null
+            is List<*> -> PendingJournalDelete.fromSaveable(value)
+            else -> error("Invalid pending journal delete state")
+        }
+    },
+)
 
 private val moodOptions = listOf(
     1 to "😞 Low",
@@ -62,10 +89,45 @@ private val moodOptions = listOf(
 @Composable
 fun JournalScreen(viewModel: TomiViewModel) {
     val entries by viewModel.journal.collectAsStateWithLifecycle()
-    var query by remember { mutableStateOf("") }
-    var pinnedOnly by remember { mutableStateOf(false) }
-    var editorOpen by remember { mutableStateOf(false) }
-    var editingEntry by remember { mutableStateOf<JournalEntity?>(null) }
+    JournalScreen(
+        entries = entries,
+        onSaveEntry = viewModel::saveJournal,
+        onDeleteEntry = viewModel::deleteJournal,
+        onTogglePin = viewModel::toggleJournalPin,
+        editorContent = { entry, onDismiss, onSave, onDelete ->
+            JournalEditorSheet(entry, onDismiss, onSave, onDelete)
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+private val DefaultJournalEditorContent: @Composable (JournalEntity, () -> Unit, (JournalEntity, (Boolean) -> Unit) -> Unit, (JournalEntity) -> Unit) -> Unit =
+    { entry, onDismiss, onSave, onDelete -> JournalEditorSheet(entry, onDismiss, onSave, onDelete) }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun JournalScreen(
+    entries: List<JournalEntity>,
+    onSaveEntry: (JournalEntity, (Boolean) -> Unit) -> Unit,
+    onDeleteEntry: (JournalEntity) -> Unit,
+    onTogglePin: (JournalEntity) -> Unit,
+    editorContent: @Composable (JournalEntity, () -> Unit, (JournalEntity, (Boolean) -> Unit) -> Unit, (JournalEntity) -> Unit) -> Unit = DefaultJournalEditorContent,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var pinnedOnly by rememberSaveable { mutableStateOf(false) }
+    var editingEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingDelete by rememberSaveable(stateSaver = PendingJournalDeleteSaver) { mutableStateOf<PendingJournalDelete?>(null) }
+    var editorGeneration by remember { mutableStateOf(0L) }
+    val editingEntry = when (editingEntryId) {
+        null -> null
+        0L -> JournalEntity(
+            title = "",
+            body = "",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+        )
+        else -> entries.firstOrNull { it.id == editingEntryId }
+    }
 
     val visibleEntries = entries.filter { entry ->
         val matchesQuery = query.isBlank() ||
@@ -79,11 +141,7 @@ fun JournalScreen(viewModel: TomiViewModel) {
         topBar = { TopAppBar(title = { Text("Journal") }) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = {
-                    val now = System.currentTimeMillis()
-                    editingEntry = JournalEntity(title = "", body = "", createdAt = now, updatedAt = now)
-                    editorOpen = true
-                },
+                onClick = { editingEntryId = 0L; editorGeneration++ },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
                 text = { Text("New entry") },
             )
@@ -118,12 +176,9 @@ fun JournalScreen(viewModel: TomiViewModel) {
                     items(visibleEntries, key = { it.id }) { entry ->
                         JournalRow(
                             entry = entry,
-                            onEdit = {
-                                editingEntry = entry
-                                editorOpen = true
-                            },
-                            onPin = { viewModel.toggleJournalPin(entry) },
-                            onDelete = { viewModel.deleteJournal(entry) },
+                            onEdit = { editingEntryId = entry.id; editorGeneration++ },
+                            onPin = { onTogglePin(entry) },
+                            onDelete = { pendingDelete = PendingJournalDelete(entry.id, entry.title) },
                         )
                     }
                 }
@@ -131,21 +186,37 @@ fun JournalScreen(viewModel: TomiViewModel) {
         }
     }
 
-    if (editorOpen) {
-        editingEntry?.let { entry ->
-            JournalEditorSheet(
-                entry = entry,
-                onDismiss = { editorOpen = false },
-                onSave = {
-                    viewModel.saveJournal(it)
-                    editorOpen = false
-                },
-                onDelete = {
-                    viewModel.deleteJournal(it)
-                    editorOpen = false
-                },
-            )
-        }
+    editingEntry?.let { entry ->
+        editorContent(
+            entry,
+            { editingEntryId = null; editorGeneration++ },
+            { entryToSave, onSaved ->
+                val saveGeneration = editorGeneration
+                onSaveEntry(entryToSave) { saved ->
+                    if (editorGeneration != saveGeneration) return@onSaveEntry
+                    onSaved(saved)
+                    if (saved) editingEntryId = null
+                }
+            },
+            { entryToDelete ->
+                val deleteGeneration = editorGeneration
+                onDeleteEntry(entryToDelete)
+                if (editorGeneration == deleteGeneration) editingEntryId = null
+            },
+        )
+    }
+    pendingDelete?.let { pending ->
+        val entry = entries.firstOrNull { it.id == pending.id }
+            ?: JournalEntity(id = pending.id, title = pending.title, body = "", createdAt = 0L, updatedAt = 0L)
+        ConfirmDeleteDialog(
+            title = "Delete journal entry?",
+            message = "“${entry.title}” will be permanently deleted.",
+            onConfirm = {
+                onDeleteEntry(entry)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
     }
 }
 
@@ -220,17 +291,22 @@ private fun EmptyJournalState(hasEntries: Boolean, modifier: Modifier = Modifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun JournalEditorSheet(
+internal fun JournalEditorSheet(
     entry: JournalEntity,
     onDismiss: () -> Unit,
-    onSave: (JournalEntity) -> Unit,
+    onSave: (JournalEntity, (Boolean) -> Unit) -> Unit,
     onDelete: (JournalEntity) -> Unit,
 ) {
-    var title by remember(entry.id) { mutableStateOf(entry.title) }
-    var body by remember(entry.id) { mutableStateOf(entry.body) }
-    var tags by remember(entry.id) { mutableStateOf(entry.tags) }
-    var mood by remember(entry.id) { mutableStateOf(entry.mood) }
-    var pinned by remember(entry.id) { mutableStateOf(entry.pinned) }
+    var title by rememberSaveable(entry.id) { mutableStateOf(entry.title) }
+    var body by rememberSaveable(entry.id) { mutableStateOf(entry.body) }
+    var tags by rememberSaveable(entry.id) { mutableStateOf(entry.tags) }
+    var mood by rememberSaveable(entry.id) { mutableStateOf(entry.mood) }
+    var pinned by rememberSaveable(entry.id) { mutableStateOf(entry.pinned) }
+    var saving by remember { mutableStateOf(false) }
+    var saveInFlight by remember { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -241,6 +317,7 @@ private fun JournalEditorSheet(
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SnackbarHost(snackbarHostState)
             Text(if (entry.id == 0L) "New entry" else "Edit entry", style = MaterialTheme.typography.headlineSmall)
             OutlinedTextField(
                 value = title,
@@ -272,25 +349,50 @@ private fun JournalEditorSheet(
                     label = { Text(label) },
                 )
             }
-            ListItem(
-                headlineContent = { Text("Pin entry") },
-                supportingContent = { Text("Keep it at the top of your journal") },
-                trailingContent = { Switch(checked = pinned, onCheckedChange = { pinned = it }) },
+            SettingsToggleRow(
+                title = "Pin entry",
+                supportingText = "Keep it at the top of your journal",
+                checked = pinned,
+                onCheckedChange = { pinned = it },
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (entry.id != 0L) {
-                    TextButton(onClick = { onDelete(entry) }) { Text("Delete") }
+                    TextButton(onClick = { showDeleteDialog = true }) { Text("Delete") }
                 }
                 Box(Modifier.weight(1f))
                 Button(
+                    enabled = (title.isNotBlank() || body.isNotBlank()) && !saving && !saveInFlight,
                     onClick = {
-                        onSave(entry.copy(title = title, body = body, tags = tags, mood = mood, pinned = pinned))
+                        if (saving || saveInFlight) return@Button
+                        saving = true
+                        saveInFlight = true
+                        onSave(entry.copy(title = title, body = body, tags = tags, mood = mood, pinned = pinned)) { saved ->
+                            saving = false
+                            saveInFlight = false
+                            if (saved) {
+                                onDismiss()
+                            } else {
+                                scope.launch { snackbarHostState.showSnackbar("Could not save entry. Your draft is still here.") }
+                            }
+                        }
                     },
-                ) { Text("Save") }
+                ) { Text(if (saving) "Saving…" else "Save") }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        ConfirmDeleteDialog(
+            title = "Delete journal entry?",
+            message = "“${entry.title}” will be permanently deleted.",
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete(entry)
+            },
+            onDismiss = { showDeleteDialog = false },
+        )
     }
 }

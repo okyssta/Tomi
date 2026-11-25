@@ -1,11 +1,16 @@
 package com.tomi.app.ui
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import com.tomi.app.BuildConfig
 import com.tomi.app.backup.BackupManager
+import com.tomi.app.backup.BackupRestoreCoordinator
+import com.tomi.app.backup.DataMaintenanceCoordinator
 import com.tomi.app.data.local.DailyCheckInEntity
 import com.tomi.app.data.local.JournalEntity
 import com.tomi.app.data.local.MovementEntity
@@ -17,30 +22,38 @@ import com.tomi.app.data.settings.SettingsRepository
 import com.tomi.app.data.settings.TomiSettings
 import com.tomi.app.health.HealthConnectManager
 import com.tomi.app.health.HealthStatus
+import com.tomi.app.health.StepSyncResult
 import com.tomi.app.health.StepSyncPlanner
 import com.tomi.app.reminder.MovementSessionRecorder
 import com.tomi.app.reminder.ReminderNotifier
 import com.tomi.app.reminder.ReminderScheduler
 import com.tomi.app.update.AppVersion
+import com.tomi.app.update.ApkIdentityVerifier
 import com.tomi.app.update.HttpUrlConnectionUpdateHttp
+import com.tomi.app.update.InstallUpdateContract
 import com.tomi.app.update.UpdateDownloadScheduler
 import com.tomi.app.update.UpdateInfo
 import com.tomi.app.update.UpdateRepository
 import com.tomi.app.update.UpdateResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+import java.util.UUID
 
 sealed interface UpdateUiState {
     data object Idle : UpdateUiState
@@ -48,18 +61,33 @@ sealed interface UpdateUiState {
     data object UpToDate : UpdateUiState
     data class Available(val info: UpdateInfo) : UpdateUiState
     data class DownloadQueued(val info: UpdateInfo) : UpdateUiState
-    data class Error(val message: String) : UpdateUiState
+    data class DownloadReady(val info: UpdateInfo) : UpdateUiState
+    data class Error(val message: String, val info: UpdateInfo? = null) : UpdateUiState
 }
 
+internal fun updateDownloadUiState(info: UpdateInfo, state: WorkInfo.State): UpdateUiState = when (state) {
+    WorkInfo.State.SUCCEEDED -> UpdateUiState.DownloadReady(info)
+    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> UpdateUiState.Error("Update download failed. Tap Download to retry.", info)
+    else -> UpdateUiState.DownloadQueued(info)
+}
+
+sealed interface StepSyncUiState {
+    data object Idle : StepSyncUiState
+    data object Loading : StepSyncUiState
+    data object Ready : StepSyncUiState
+    data object PermissionRequired : StepSyncUiState
+    data class Error(val message: String) : StepSyncUiState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class TomiViewModel(application: Application) : AndroidViewModel(application) {
     private val database = TomiDatabase.get(application)
     private val settingsRepository = SettingsRepository.from(application)
     private val healthManager = HealthConnectManager(application, settingsRepository, database.stepCacheDao())
     private val recorder = MovementSessionRecorder(application, settingsRepository, database)
     private val backupManager = BackupManager(application, database, settingsRepository)
-    private val today = LocalDate.now()
-    private val zone = ZoneId.systemDefault()
-    private val todayBounds = StepSyncPlanner.dayBounds(today, zone)
+    private val currentDay = CurrentDay()
+    val dayContext = currentDay.context
 
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready
@@ -89,69 +117,108 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
     )
-    val stepCache = database.stepCacheDao()
-        .observeBetween(today.minusDays(29).toString(), today.toString())
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val checkIn = database.checkInDao().observeDate(today.toString()).stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        null,
-    )
-    val waterMl = database.waterDao()
-        .observeTotalMl(todayBounds.start.toEpochMilli(), todayBounds.endExclusive.toEpochMilli())
+    val stepCache = currentDay.context.flatMapLatest { context ->
+        database.stepCacheDao().observeBetween(context.date.minusDays(29).toString(), context.date.toString())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val checkIn = currentDay.context.flatMapLatest { context ->
+        database.checkInDao().observeDate(context.date.toString())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val waterMl = currentDay.context.flatMapLatest { context ->
+        val bounds = StepSyncPlanner.dayBounds(context.date, context.zone)
+        database.waterDao().observeTotalMl(bounds.start.toEpochMilli(), bounds.endExclusive.toEpochMilli())
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    val todaySteps = stepCache.map { entries ->
-        entries.firstOrNull { it.date == today.toString() }?.steps
+    val todaySteps = combine(currentDay.context, stepCache) { context, entries ->
+        entries.firstOrNull { it.date == context.date.toString() }?.steps
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val todayMovements = movements.map { entries ->
+    val todayMovements = combine(currentDay.context, movements) { context, entries ->
         entries.filter {
-            Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() == today
+            Instant.ofEpochMilli(it.startedAt).atZone(context.zone).toLocalDate() == context.date
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _healthStatus = MutableStateFlow(HealthStatus.UNKNOWN)
     val healthStatus: StateFlow<HealthStatus> = _healthStatus
 
+    private val _backgroundHealthGranted = MutableStateFlow(false)
+    val backgroundHealthGranted: StateFlow<Boolean> = _backgroundHealthGranted
+
+    private val _stepSyncState = MutableStateFlow<StepSyncUiState>(StepSyncUiState.Idle)
+    val stepSyncState: StateFlow<StepSyncUiState> = _stepSyncState
+
     private val _updateState = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
     val updateState: StateFlow<UpdateUiState> = _updateState
+    private var updateDownloadJob: Job? = null
 
     private val _events = MutableSharedFlow<String>()
     val events = _events.asSharedFlow()
 
+    private val _dataCleared = MutableSharedFlow<Unit>()
+    val dataCleared = _dataCleared.asSharedFlow()
+
     private var lastWaterId: Long? = null
+    private val _canUndoWater = MutableStateFlow(false)
+    val canUndoWater: StateFlow<Boolean> = _canUndoWater
 
     init {
+        viewModelScope.launch {
+            while (true) {
+                currentDay.refresh()
+                delay(60_000L)
+            }
+        }
         viewModelScope.launch {
             settingsRepository.settings.first()
             _ready.value = true
             refreshHealth()
-            com.tomi.app.update.UpdateCheckScheduler.checkIfDue(getApplication())
+            if (BuildConfig.UPDATES_ENABLED) {
+                com.tomi.app.update.UpdateCheckScheduler.checkIfDue(getApplication())
+            }
         }
     }
 
     fun refreshHealth() {
         viewModelScope.launch {
-            _healthStatus.value = healthManager.status()
-            if (_healthStatus.value == HealthStatus.AVAILABLE_GRANTED) {
-                healthManager.syncSteps()
+            DataMaintenanceCoordinator.exclusive {
+                currentDay.refresh()
+                _healthStatus.value = healthManager.status()
+                _backgroundHealthGranted.value = healthManager.hasBackgroundReadPermission()
+                if (_healthStatus.value == HealthStatus.AVAILABLE_GRANTED) {
+                    _stepSyncState.value = StepSyncUiState.Loading
+                    _stepSyncState.value = when (val result = healthManager.syncStepsExclusive()) {
+                        is StepSyncResult.Success -> StepSyncUiState.Ready
+                        StepSyncResult.PermissionRequired -> StepSyncUiState.PermissionRequired
+                        is StepSyncResult.Error -> StepSyncUiState.Error(result.cause.message ?: "Could not refresh steps")
+                    }
+                } else {
+                    _stepSyncState.value = StepSyncUiState.PermissionRequired
+                }
             }
         }
     }
 
-    fun saveTask(task: TaskEntity) {
+    fun saveTask(task: TaskEntity, onResult: (Boolean) -> Unit) {
         val title = task.title.trim()
         if (title.isEmpty()) {
             emit("Task title cannot be empty")
+            onResult(false)
             return
         }
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            if (task.id == 0L) {
-                database.taskDao().insert(task.copy(title = title, createdAt = now, updatedAt = now))
-            } else {
-                database.taskDao().update(task.copy(title = title, updatedAt = now))
+            try {
+                val now = System.currentTimeMillis()
+                if (task.id == 0L) {
+                    database.taskDao().insert(task.copy(title = title, createdAt = now, updatedAt = now))
+                } else {
+                    database.taskDao().update(task.copy(title = title, updatedAt = now))
+                }
+                onResult(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                onResult(false)
             }
         }
     }
@@ -172,24 +239,32 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { database.taskDao().delete(task) }
     }
 
-    fun saveJournal(entry: JournalEntity) {
+    fun saveJournal(entry: JournalEntity, onResult: (Boolean) -> Unit) {
         val title = entry.title.trim()
         val body = entry.body.trim()
         if (title.isEmpty() && body.isEmpty()) {
             emit("Write something before saving")
+            onResult(false)
             return
         }
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val saved = entry.copy(
-                title = title.ifEmpty { "Untitled entry" },
-                body = body,
-                updatedAt = now,
-            )
-            if (entry.id == 0L) {
-                database.journalDao().insert(saved.copy(createdAt = now))
-            } else {
-                database.journalDao().update(saved)
+            try {
+                val now = System.currentTimeMillis()
+                val saved = entry.copy(
+                    title = title.ifEmpty { "Untitled entry" },
+                    body = body,
+                    updatedAt = now,
+                )
+                if (entry.id == 0L) {
+                    database.journalDao().insert(saved.copy(createdAt = now))
+                } else {
+                    database.journalDao().update(saved)
+                }
+                onResult(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                onResult(false)
             }
         }
     }
@@ -207,9 +282,10 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     fun saveCheckIn(mood: Int, energy: Int, note: String) {
         require(mood in 1..5 && energy in 1..5)
         viewModelScope.launch {
+            currentDay.refresh()
             database.checkInDao().upsert(
                 DailyCheckInEntity(
-                    date = today.toString(),
+                    date = currentDay.context.value.date.toString(),
                     mood = mood,
                     energy = energy,
                     note = note.trim(),
@@ -225,11 +301,13 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
             lastWaterId = database.waterDao().insert(
                 WaterEntity(amountMl = amountMl, timestamp = System.currentTimeMillis()),
             )
+            _canUndoWater.value = true
         }
     }
 
     fun undoWater() {
         val id = lastWaterId ?: return
+        _canUndoWater.value = false
         viewModelScope.launch {
             database.waterDao().deleteById(id)
             lastWaterId = null
@@ -291,10 +369,15 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository,
                 ReminderNotifier(getApplication()),
             ).reschedule()
+            com.tomi.app.reminder.ReminderWorker.enqueue(getApplication())
+            if (BuildConfig.UPDATES_ENABLED) {
+                com.tomi.app.update.UpdateCheckScheduler.scheduleDaily(getApplication())
+            }
         }
     }
 
     fun checkForUpdates() {
+        if (!BuildConfig.UPDATES_ENABLED) return
         viewModelScope.launch {
             _updateState.value = UpdateUiState.Checking
             val repository = UpdateRepository(
@@ -312,27 +395,113 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun downloadUpdate(info: UpdateInfo) {
-        UpdateDownloadScheduler.enqueue(getApplication(), info, unmeteredOnly = false)
-        _updateState.value = UpdateUiState.DownloadQueued(info)
+        if (!BuildConfig.UPDATES_ENABLED) return
+        updateDownloadJob?.cancel()
+        updateDownloadJob = viewModelScope.launch {
+            try {
+                val workId = UpdateDownloadScheduler.enqueue(getApplication(), info, unmeteredOnly = false)
+                _updateState.value = UpdateUiState.DownloadQueued(info)
+                observeUpdateDownload(workId, info)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _updateState.value = UpdateUiState.Error(error.message ?: "Update download failed", info)
+            }
+        }
+    }
+
+    fun resumeUpdateDownloadState() {
+        if (!BuildConfig.UPDATES_ENABLED) return
+        updateDownloadJob?.cancel()
+        updateDownloadJob = viewModelScope.launch {
+            try {
+                val snapshot = UpdateDownloadScheduler.latestDownload(getApplication()) ?: return@launch
+                observeUpdateDownload(snapshot.pending.workId, snapshot.pending.info)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _updateState.value = UpdateUiState.Error(error.message ?: "Update state could not be restored")
+            }
+        }
+    }
+
+    private suspend fun observeUpdateDownload(workId: String, info: UpdateInfo) {
+        val id = runCatching { UUID.fromString(workId) }.getOrNull() ?: return
+        WorkManager.getInstance(getApplication<Application>())
+            .getWorkInfoByIdFlow(id)
+            .collect { work ->
+                val current = work ?: return@collect
+                _updateState.value = updateDownloadUiState(info, current.state)
+            }
+    }
+
+    fun installUpdate(info: UpdateInfo) {
+        if (!BuildConfig.UPDATES_ENABLED) return
+        val context = getApplication<Application>()
+        val apk = File(context.cacheDir, "updates/tomi-${info.versionName}.apk")
+        if (!ApkIdentityVerifier.verify(context, apk, BuildConfig.APPLICATION_ID, info.versionName)) {
+            _updateState.value = UpdateUiState.Error("Downloaded update is missing or failed verification", info)
+            return
+        }
+        val intent = Intent().apply {
+            setClassName(context, InstallUpdateContract.ACTIVITY_CLASS)
+            putExtra(InstallUpdateContract.EXTRA_APK_PATH, apk.absolutePath)
+            putExtra(InstallUpdateContract.EXTRA_VERSION, info.versionName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     fun clearAllData() {
         viewModelScope.launch(Dispatchers.IO) {
-            database.clearAllTables()
-            settingsRepository.clearAll()
-            _updateState.value = UpdateUiState.Idle
-            emit("All Tomi data cleared")
+            try {
+                DataMaintenanceCoordinator.exclusive {
+                    val context = getApplication<Application>()
+                    DataMaintenanceCoordinator.clear(
+                        deleteUpdateCache = {
+                            val cache = File(context.cacheDir, "updates")
+                            cache.deleteRecursively() || !cache.exists()
+                        },
+                        clearDatabase = { database.clearAllTables() },
+                        clearSettings = {
+                            settingsRepository.clearAll()
+                        },
+                        afterPersistentDataCleared = {
+                            val notifier = ReminderNotifier(context)
+                            ReminderScheduler(context, settingsRepository, notifier).cancel()
+                            UpdateDownloadScheduler.cancelAndClear(context)
+                            androidx.core.app.NotificationManagerCompat.from(context).cancelAll()
+                            updateDownloadJob?.cancel()
+                            updateDownloadJob = null
+                        },
+                    )
+                    currentDay.refresh()
+                    lastWaterId = null
+                    _canUndoWater.value = false
+                    _updateState.value = UpdateUiState.Idle
+                    _dataCleared.emit(Unit)
+                }
+                emit("All Tomi data cleared")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Clear failed: ${error.message ?: "unknown error"}")
+            }
         }
     }
 
     fun exportTo(uri: Uri) {
         viewModelScope.launch {
             try {
-                val content = backupManager.export()
-                getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use {
-                    it.write(content.toByteArray())
-                } ?: error("Could not open backup file")
+                DataMaintenanceCoordinator.exclusive {
+                    val content = backupManager.export()
+                    getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use {
+                        it.write(content.toByteArray())
+                    } ?: error("Could not open backup file")
+                }
                 emit("Backup exported")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 emit("Export failed: ${error.message ?: "unknown error"}")
             }
@@ -342,12 +511,30 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     fun importFrom(uri: Uri) {
         viewModelScope.launch {
             try {
-                val content = getApplication<Application>().contentResolver.openInputStream(uri)?.use {
-                    it.readBytes().toString(Charsets.UTF_8)
-                } ?: error("Could not open backup file")
-                backupManager.import(content)
+                DataMaintenanceCoordinator.exclusive {
+                    BackupRestoreCoordinator.completeImport(
+                        commit = {
+                            val input = getApplication<Application>().contentResolver.openInputStream(uri)
+                                ?: error("Could not open backup file")
+                            input.use { backupManager.import(it) }
+                        },
+                        maintenance = {
+                            val importedSettings = settingsRepository.settings.first()
+                            ReminderScheduler(
+                                getApplication(),
+                                settingsRepository,
+                                ReminderNotifier(getApplication()),
+                            ).reschedule()
+                            if (importedSettings.reminder.enabled) {
+                                com.tomi.app.reminder.ReminderWorker.enqueue(getApplication())
+                            }
+                        },
+                    )
+                }
                 refreshHealth()
                 emit("Backup imported")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 emit("Import failed: ${error.message ?: "invalid backup"}")
             }

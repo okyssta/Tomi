@@ -48,7 +48,7 @@ object UpdateCheckScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             "tomi_update_check",
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request,
         )
     }
@@ -63,6 +63,8 @@ class UpdateCheckWorker(
     override suspend fun doWork(): Result = try {
         UpdateCheckScheduler.checkIfDue(applicationContext)
         Result.success()
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
     } catch (_: Exception) {
         Result.retry()
     }
