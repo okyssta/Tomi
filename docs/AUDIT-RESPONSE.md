@@ -36,12 +36,12 @@ Status key: **Fixed** = source changed and automated or artifact evidence exists
 | UI-1 | Check-in date could be stale at midnight | Fixed | `saveCheckIn` refreshes `CurrentDay` immediately before selecting the database key. |
 | UI-2 | Background update completion was lost after process restart | Fixed | A validated DataStore snapshot persists complete retry metadata and the WorkManager UUID; Settings resumes terminal and nonterminal state deterministically. |
 | UI-3 | Editor delete bypassed confirmation | Fixed | Task and journal editors now show the shared destructive-action dialog. Task-editor regression test passes. |
-| UI-4 | Public privacy URL returned 404 | Open/publishing | `docs/privacy.html` and a GitHub Pages workflow with a post-deploy HTTP 200 gate now exist. The canonical URL still returned HTTP 404 on this host; Pages must be enabled and the workflow must pass before publication is claimed. |
+| UI-4 | Public privacy URL returned 404 | Fixed | GitHub Pages now serves the `docs` directory from `main`; the canonical URL returned HTTP 200 and matched the repository policy file, and release publication rechecks its SHA-256. |
 | UI-5 | Repeated Change/Choose/Clear labels lacked context | Fixed | Reminder start/end and task date/time actions have row-specific accessibility descriptions. |
 | REL-1 | Version codes could regress | Fixed | Stable-tag workflow rejects non-monotonic codes and components above 999. The standalone verifier now also rejects `v0.0.0` and codes not greater than every previous valid stable tag; negative CLI tests pass. |
 | REL-2 | Release scheduling still used `REPLACE`/obsolete variants | Fixed | Current direct/Play task names are used; periodic maintenance uses `UPDATE`; one-time downloads use `APPEND_OR_REPLACE` plus unique temporary files and atomic promotion. |
 | REL-3 | Pre-release tags could silently publish stable releases | Fixed | The workflow accepts only exact `vMAJOR.MINOR.PATCH` tags and sets `prerelease: false` only after that validation. |
-| REL-4 | Privacy policy publication was not enforced | Open/publishing | `.github/workflows/pages.yml` stages only `docs/privacy.html`, deploys through GitHub Pages, and fails unless the canonical URL returns HTTP 200. The URL still returned HTTP 404 on this host, so repository Pages enablement and a successful deployment remain unverified. |
+| REL-4 | Privacy policy publication was not enforced | Fixed | GitHub Pages serves `docs` from `main`; the canonical URL returned HTTP 200 with matching content, and the release workflow rejects a missing or stale policy hash. |
 | REL-5 | Bundletool was executed without authenticating its jar hash | Fixed | `scripts/verify-release.sh` checks the pinned Bundletool 1.18.3 SHA-256 before invoking Java. A negative CLI test proves a tampered jar is rejected without execution. |
 
 ## Final remediation pass

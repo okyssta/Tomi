@@ -45,7 +45,7 @@ Tomi has no account, ads, analytics, location tracking, or cloud sync. Tasks, jo
 1. GitHub release metadata and release-asset downloads for the in-app updater.
 2. Google Play links when Health Connect must be installed or updated.
 
-Read [docs/PRIVACY.md](docs/PRIVACY.md) for the full data and permission model. A GitHub Pages workflow is provided for the [privacy-policy URL](https://okyssta.github.io/Tomi/privacy.html), but publication remains unverified until Pages is enabled and the workflow's HTTP 200 gate passes; see [docs/VERIFICATION.md](docs/VERIFICATION.md).
+Read [docs/PRIVACY.md](docs/PRIVACY.md) for the full data and permission model. The public [privacy-policy URL](https://okyssta.github.io/Tomi/privacy.html) is served from the `docs` directory through GitHub Pages, and release publication verifies its content hash.
 
 ## Development
 

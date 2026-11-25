@@ -25,8 +25,8 @@ Raw JUnit XML, lint text reports, test totals, artifact metadata, and hashes are
 
 - `bash scripts/test-verify-release.sh` passed. It proves `v0.0.0` and version-code regressions are rejected before download, and a Bundletool jar with the wrong SHA-256 is rejected before Java executes it.
 - The release workflow explicitly compares both APK and AAB signer digests with the pinned certificate.
-- `.github/workflows/pages.yml` stages only `docs/privacy.html` and includes a retrying HTTP 200 post-deploy gate.
-- The canonical URL `https://okyssta.github.io/Tomi/privacy.html` returned **HTTP 404** on this host. GitHub Pages has not been enabled or deployment-verified here, so publication is not claimed.
+- GitHub Pages publishes the `main` branch `/docs` directory; the release workflow compares the public policy SHA-256 with the repository file before publishing.
+- The canonical URL `https://okyssta.github.io/Tomi/privacy.html` returned **HTTP 200** and its downloaded bytes matched `docs/privacy.html`.
 
 ### Local artifact identity
 

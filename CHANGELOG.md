@@ -42,7 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Preserved task/journal editor identity and drafts, backup-import confirmation, reminder time-picker state, and destructive confirmations across recreation.
 - Weekday chips now announce full localized names, and the privacy-policy row has a single click target.
 - Home quick actions wrap as stacked equal-width buttons, and misleading progress stop dots were removed.
-- Release verification rejects zero or regressed version codes, authenticates the Bundletool jar before execution, and checks both APK and AAB signer digests; the Pages workflow gates publication on HTTP 200.
+- Release verification rejects zero or regressed version codes, authenticates the Bundletool jar before execution, checks both APK and AAB signer digests, and verifies the published privacy-policy content hash.
 - Backup export/import/clear now share one maintenance lock; rollback failures, incomplete backups, future-dated step entries, cancellation, and clear/update races are handled explicitly.
 - Updater metadata rolls back work enqueue failures, update clears are serialized, and process-death editor restoration no longer strands Save.
 - Added an independent-review response at `docs/AUDIT-RESPONSE.md`.

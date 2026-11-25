@@ -36,7 +36,7 @@ The workflow decodes the keystore into the runner's temporary directory and writ
 
 ## Privacy policy publication
 
-The repository's GitHub Pages source must be set to **GitHub Actions** before `.github/workflows/pages.yml` can deploy. The workflow stages only `docs/privacy.html` and fails unless `https://okyssta.github.io/Tomi/privacy.html` returns HTTP 200 after deployment. Pages enablement and a successful public response are release gates; the URL returned HTTP 404 on the current verification host and publication is not claimed.
+The repository's GitHub Pages source is the `main` branch `/docs` directory. Every push that changes `docs/privacy.html` republishes the public policy at `https://okyssta.github.io/Tomi/privacy.html`. The release workflow downloads that URL and requires its SHA-256 to match the repository file before publishing artifacts.
 
 ## Local signing
 
