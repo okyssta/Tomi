@@ -2,7 +2,29 @@
 
 Verification is recorded here only after the corresponding command or artifact check actually runs.
 
-## Current candidate: 1.1.3 (version code 1001003)
+## Current candidate: 1.1.4 (version code 1001004)
+
+### Published release
+
+Release: <https://github.com/okyssta/Tomi/releases/tag/v1.1.4>
+
+- Release workflow run `45863479666` completed successfully at commit `e6436afc00b852db1279bc648e6638fb50b63b66`.
+- All seven published assets downloaded; checksums passed.
+- Published `tomi-release.apk` SHA-256: `1d8a1b5d3dcecb260df97e5b3679747e92a7dedd3bda220a48853882fda48aca`.
+- `scripts/verify-release.sh v1.1.4` passed package/version/SDK identity, APK and AAB signer identity, 16 KB alignment, Play exclusions, and all checksums.
+
+### Namaz addon
+
+- Added a generic addons setting and the optional Namaz prayer-time/tracker addon.
+- Prayer times are calculated on-device with Adhan 1.2.1 using coarse location requested only on demand; no prayer network service or Tomi server is involved.
+- Hanafi/Shafi Asr and Karachi/MWL/ISNA methods are selectable.
+- Prayer offered/not-offered records are stored in the new `prayer_logs` Room table and included in JSON/Drive backups.
+- The database migration from version 1 to 2 creates the table without dropping existing records.
+- Direct tests: **195 passed, 0 failures, 0 errors, 0 skipped**.
+- Play tests: **191 passed, 0 failures, 0 errors, 0 skipped**.
+- Lint: direct and Play debug lint passed.
+
+## Previous release: 1.1.3 (version code 1001003)
 
 ### Google Drive backup
 
