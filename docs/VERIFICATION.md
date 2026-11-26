@@ -4,6 +4,15 @@ Verification is recorded here only after the corresponding command or artifact c
 
 ## Current candidate: 1.1.1 (version code 1001001)
 
+### Published release
+
+Release: <https://github.com/okyssta/Tomi/releases/tag/v1.1.1>
+
+- Release workflow run `45786195820` completed successfully at commit `0fbc931761fbce792f92c0c409c3cdf86a2f9153`.
+- All seven published assets downloaded; `sha256sum --check SHA256SUMS.txt` passed.
+- Published `tomi-release.apk` SHA-256: `1d780df2141a37c41f43e35218eab6a98ae7718774ccdea2f9621dda7bd9ec65`.
+- `scripts/verify-release.sh v1.1.1` passed package/version/SDK identity, APK and AAB signer identity, 16 KB alignment, Play exclusions, and all checksums.
+
 ### Update/startup crash hardening
 
 - Startup reminder and update scheduling failures no longer escape `TomiApp.onCreate`.
@@ -12,7 +21,7 @@ Verification is recorded here only after the corresponding command or artifact c
 - `SettingsCorruptionTest` writes a deliberately corrupt preferences file and verifies that `SettingsRepository` falls back to defaults.
 - Direct tests: **180 passed, 0 failures, 0 errors, 0 skipped**.
 - Play tests: **176 passed, 0 failures, 0 errors, 0 skipped**.
-- Signed direct APK: `dist/Tomi-1.1.1.apk`, SHA-256 `260160eec1f00e27f2e8195a97799791070aab34be2a2eabbb67b446a9dc7a43`, version `1.1.1`, code `1001001`, signed by the existing Tomi release certificate.
+- Local signed direct APK: `dist/Tomi-1.1.1.apk`, SHA-256 `260160eec1f00e27f2e8195a97799791070aab34be2a2eabbb67b446a9dc7a43`, version `1.1.1`, code `1001001`, signed by the existing Tomi release certificate.
 
 ## Previous release: 1.1.0 (version code 1001000)
 
