@@ -13,6 +13,10 @@ data class TomiSettings(
     val smartPause: Boolean = true,
     val autoDownloadUpdates: Boolean = true,
     val onboardingComplete: Boolean = false,
+    val googleDriveTreeUri: String? = null,
+    val googleDriveFolderName: String? = null,
+    val googleDriveLastBackupAt: Long? = null,
+    val googleDriveAutoSync: Boolean = true,
 )
 
 data class ReminderRuntimeState(

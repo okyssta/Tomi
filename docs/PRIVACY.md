@@ -1,6 +1,6 @@
 # Privacy model
 
-Effective: 25 November 2026. Developer: [@okyssta](https://github.com/okyssta). Privacy/security contact: [private vulnerability reporting](https://github.com/okyssta/Tomi/security/advisories/new). The public policy is published at <https://okyssta.github.io/Tomi/privacy.html> and is available inside Tomi under Settings → Privacy policy.
+Effective: 26 November 2026. Developer: [@okyssta](https://github.com/okyssta). Privacy/security contact: [private vulnerability reporting](https://github.com/okyssta/Tomi/security/advisories/new). The public policy is published at <https://okyssta.github.io/Tomi/privacy.html> and is available inside Tomi under Settings → Privacy policy.
 
 ## Data stored locally
 
@@ -12,7 +12,7 @@ Effective: 25 November 2026. Developer: [@okyssta](https://github.com/okyssta). 
 - Step totals cached from Health Connect
 - Reminder settings, goals, theme, and update preferences
 
-Tomi stores these in its app-private Room database and DataStore files. Android cloud backup and device-transfer extraction are disabled. The app provides explicit JSON export and import instead.
+Tomi stores these in its app-private Room database and DataStore files. Android cloud backup and device-transfer extraction are disabled. The app provides explicit JSON export and import instead, plus optional user-selected Google Drive backup.
 
 ## Health Connect
 
@@ -37,7 +37,13 @@ Release downloads must use exact HTTPS GitHub repository URLs. The app verifies 
 
 The Google Play edition does not include the APK self-updater, installer activity, unknown-app permission, foreground data-sync permission, or Tomi internet permission. Play handles updates. Opening the privacy policy or Health Connect listing uses the browser or Play Store outside Tomi.
 
-There is no analytics SDK, advertising SDK, crash-upload service, account system, or server-side personal-data storage.
+There is no analytics SDK, advertising SDK, crash-upload service, account system, or server-side personal-data storage operated by Tomi.
+
+## Optional Google Drive backup
+
+Tomi can optionally write a JSON backup to a folder you select through Android's system document picker. This uses Android's Storage Access Framework, not a Google sign-in SDK or a Tomi account. The only grant Tomi receives is read/write access to the folder you choose; Tomi does not receive your Google password or OAuth token.
+
+The backup contains the same records listed under "Data stored locally". It is written directly to your chosen provider at `Tomi Backups/tomi-backup.json`, overwritten on each sync, and controlled by your Google Drive account. Tomi never uploads it to a Tomi server. Disconnecting in Settings releases the folder grant; the existing file remains in your Drive until you delete it. Restoring a Drive backup replaces local Tomi data after confirmation.
 
 ## Permissions
 

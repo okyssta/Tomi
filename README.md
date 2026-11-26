@@ -17,7 +17,7 @@ Tomi is an offline-first Android companion for people who spend long workdays at
 - **Water:** 250 ml quick-add with undo and a configurable daily goal.
 - **Progress:** weekly step chart, active minutes, movement history, and a movement-day streak.
 - **Widget:** steps, next reminder, and quick break actions on the home screen.
-- **Backups:** JSON export/import for tasks, journal, movement, check-ins, water, cached steps, and settings.
+- **Backups:** JSON export/import plus optional Google Drive backup through Android's system folder picker, with manual and automatic sync.
 - **Direct-download updates:** automatic release checks, optional Wi-Fi downloads, SHA-256 plus pinned signing-identity verification, and an explicit Android install prompt. The Play edition relies on Play updates.
 - **Material 3:** standard Android components, dynamic color, light/dark/system themes, and no custom decorative UI framework.
 
@@ -40,10 +40,11 @@ Google deprecated the Google Fit APIs in 2024 and plans to turn them down at the
 
 ## Privacy
 
-Tomi has no account, ads, analytics, location tracking, or cloud sync. Tasks, journal entries, settings, movement sessions, and cached step totals are stored in the app's local database. Health Connect remains read-only. The direct edition's only network requests are:
+Tomi has no account, ads, analytics, or location tracking. Tasks, journal entries, settings, movement sessions, and cached step totals are stored in the app's local database. Health Connect remains read-only. The optional Google Drive backup writes a JSON file directly to a folder you choose through Android's system picker; it does not use a Tomi server or a Google OAuth client. The direct edition's only network requests are:
 
 1. GitHub release metadata and release-asset downloads for the in-app updater.
 2. Google Play links when Health Connect must be installed or updated.
+3. The document provider you explicitly choose for Google Drive backup.
 
 Read [docs/PRIVACY.md](docs/PRIVACY.md) for the full data and permission model. The public [privacy-policy URL](https://okyssta.github.io/Tomi/privacy.html) is served from the `docs` directory through GitHub Pages, and release publication verifies its content hash.
 
@@ -67,7 +68,7 @@ For a signed local release, create an untracked `keystore.properties` file as de
 
 ```text
 app/src/main/java/com/tomi/app/
-  backup/       JSON backup models, codec, and import/export
+  backup/       JSON backup models, codec, import/export, and Drive sync
   data/         Room entities, DAOs, database, and DataStore settings
   domain/       Reminder scheduling and movement timer/streak logic
   health/       Health Connect availability, permissions, and step sync

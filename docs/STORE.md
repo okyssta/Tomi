@@ -32,11 +32,11 @@ Screenshots are intentionally not fabricated. Capture them from a real installed
 
 **Full description:**
 
-Tomi helps people who sit at a desk build a healthier rhythm without an account or cloud sync. Set a movement reminder every 30–45 minutes during your active hours, then take a walk, stretch, stand, or log a push-up set.
+Tomi helps people who sit at a desk build a healthier rhythm without a Tomi account or Tomi cloud. Set a movement reminder every 30–45 minutes during your active hours, then take a walk, stretch, stand, or log a push-up set.
 
 Tomi can read aggregate step totals through Android Health Connect, show daily and weekly progress, and optionally reset the reminder when walking is detected. Tasks support both a due date and a due time. Keep journal notes, mood and energy check-ins, water, and movement history in one offline-first app.
 
-Your tasks, journal, check-ins, and settings stay in Tomi's app-private storage. Export and import JSON backups explicitly. No ads, analytics SDK, account, or Tomi cloud upload.
+Your tasks, journal, check-ins, and settings stay in Tomi's app-private storage. Export and import JSON backups explicitly, or opt into Google Drive backup through Android's system folder picker. No ads, analytics SDK, Tomi account, or Tomi cloud upload.
 
 Movement reminders use Android notifications and alarms. Exact-alarm access is optional; Tomi falls back to inexact alarms when it is not granted. Health Connect background access is optional and requested separately with an in-app disclosure.
 

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import com.tomi.app.BuildConfig
+import com.tomi.app.backup.drive.DriveBackupScheduler
 import com.tomi.app.data.settings.SettingsRepository
 import com.tomi.app.reminder.MovementDetectionReceiver
 import com.tomi.app.reminder.ReminderNotifier
@@ -16,9 +17,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 
 class TomiApp : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val driveBackupOnStop = object : DefaultLifecycleObserver {
+        override fun onStop(owner: LifecycleOwner) {
+            runCatching { DriveBackupScheduler.enqueueImmediate(this@TomiApp) }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +44,8 @@ class TomiApp : Application() {
         if (BuildConfig.UPDATES_ENABLED) {
             runCatching { UpdateCheckScheduler.scheduleDaily(this) }
         }
+        runCatching { DriveBackupScheduler.schedule(this) }
+        runCatching { ProcessLifecycleOwner.get().lifecycle.addObserver(driveBackupOnStop) }
         scope.launch {
             try {
                 ReminderScheduler(

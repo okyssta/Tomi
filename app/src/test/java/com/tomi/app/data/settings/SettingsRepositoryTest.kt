@@ -58,4 +58,24 @@ class SettingsRepositoryTest {
         assertEquals(100L, state.lastMovementAt)
         assertEquals(200L, state.snoozeUntil)
     }
+
+    @Test
+    fun `persists google drive connection without disturbing other settings`() = runBlocking {
+        repository.updateSettings {
+            it.copy(
+                stepGoal = 7_500,
+                googleDriveTreeUri = "content://drive/tree/root",
+                googleDriveFolderName = "Tomi Drive",
+                googleDriveLastBackupAt = 999L,
+                googleDriveAutoSync = false,
+            )
+        }
+
+        val settings = repository.settings.first()
+        assertEquals(7_500, settings.stepGoal)
+        assertEquals("content://drive/tree/root", settings.googleDriveTreeUri)
+        assertEquals("Tomi Drive", settings.googleDriveFolderName)
+        assertEquals(999L, settings.googleDriveLastBackupAt)
+        assertEquals(false, settings.googleDriveAutoSync)
+    }
 }

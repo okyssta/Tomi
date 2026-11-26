@@ -11,6 +11,9 @@ import com.tomi.app.BuildConfig
 import com.tomi.app.backup.BackupManager
 import com.tomi.app.backup.BackupRestoreCoordinator
 import com.tomi.app.backup.DataMaintenanceCoordinator
+import com.tomi.app.backup.drive.DriveBackupScheduler
+import com.tomi.app.backup.drive.GoogleDriveBackupRepository
+import com.tomi.app.backup.drive.SafGoogleDriveStore
 import com.tomi.app.data.local.DailyCheckInEntity
 import com.tomi.app.data.local.JournalEntity
 import com.tomi.app.data.local.MovementEntity
@@ -86,6 +89,11 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     private val healthManager = HealthConnectManager(application, settingsRepository, database.stepCacheDao())
     private val recorder = MovementSessionRecorder(application, settingsRepository, database)
     private val backupManager = BackupManager(application, database, settingsRepository)
+    private val googleDriveBackup = GoogleDriveBackupRepository(
+        settingsRepository = settingsRepository,
+        backup = backupManager,
+        store = SafGoogleDriveStore(application),
+    )
     private val currentDay = CurrentDay()
     val dayContext = currentDay.context
 
@@ -476,6 +484,7 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     fun clearAllData() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val driveUri = settingsRepository.settings.first().googleDriveTreeUri
                 DataMaintenanceCoordinator.exclusive {
                     val context = getApplication<Application>()
                     DataMaintenanceCoordinator.clear(
@@ -494,6 +503,8 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
                             androidx.core.app.NotificationManagerCompat.from(context).cancelAll()
                             updateDownloadJob?.cancel()
                             updateDownloadJob = null
+                            runCatching { googleDriveBackup.release(driveUri) }
+                            DriveBackupScheduler.cancel(context)
                         },
                     )
                     currentDay.refresh()
@@ -507,6 +518,112 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
                 throw error
             } catch (error: Exception) {
                 emit("Clear failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun connectGoogleDrive(treeUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var folderName = "Google Drive"
+                var backupError: Exception? = null
+                DataMaintenanceCoordinator.exclusive {
+                    folderName = googleDriveBackup.connect(treeUri)
+                    try {
+                        googleDriveBackup.backupNow()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        backupError = error
+                    }
+                }
+                DriveBackupScheduler.schedule(getApplication())
+                emit(
+                    if (backupError == null) {
+                        "Google Drive connected: $folderName"
+                    } else {
+                        "Connected to $folderName, but the first backup failed: ${backupError?.message ?: "unknown error"}"
+                    },
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Google Drive connection failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun disconnectGoogleDrive() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                DataMaintenanceCoordinator.exclusive { googleDriveBackup.disconnect() }
+                DriveBackupScheduler.cancel(getApplication())
+                emit("Google Drive disconnected")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Could not disconnect Google Drive: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun backupToGoogleDrive() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                DataMaintenanceCoordinator.exclusive { googleDriveBackup.backupNow() }
+                emit("Backed up to Google Drive")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Google Drive backup failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun restoreFromGoogleDrive() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                DataMaintenanceCoordinator.exclusive {
+                    val input = googleDriveBackup.openBackupInput()
+                        ?: error("No Tomi backup was found in Google Drive")
+                    BackupRestoreCoordinator.completeImport(
+                        commit = { input.use { backupManager.import(it) } },
+                        maintenance = {
+                            val importedSettings = settingsRepository.settings.first()
+                            ReminderScheduler(
+                                getApplication(),
+                                settingsRepository,
+                                ReminderNotifier(getApplication()),
+                            ).reschedule()
+                            if (importedSettings.reminder.enabled) {
+                                com.tomi.app.reminder.ReminderWorker.enqueue(getApplication())
+                            }
+                        },
+                    )
+                }
+                refreshHealth()
+                emit("Google Drive backup restored")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Google Drive restore failed: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun setGoogleDriveAutoSync(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                settingsRepository.updateSettings { it.copy(googleDriveAutoSync = enabled) }
+                if (enabled) {
+                    DriveBackupScheduler.schedule(getApplication())
+                } else {
+                    DriveBackupScheduler.cancel(getApplication())
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Could not change Google Drive sync: ${error.message ?: "unknown error"}")
             }
         }
     }

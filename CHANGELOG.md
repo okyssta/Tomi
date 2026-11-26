@@ -4,6 +4,16 @@ All notable changes to Tomi are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use semantic versioning.
 
+## [1.1.3] - 2026-11-26
+
+### Added
+
+- Optional Google Drive backup mode using Android's system folder picker. Tomi writes `Tomi Backups/tomi-backup.json`, supports manual backup/restore, auto-sync on app close and every six hours, and releases the folder grant on disconnect.
+
+### Changed
+
+- Privacy policy now documents the optional Google Drive provider flow; no Tomi server, Google account token, or OAuth client is involved.
+
 ## [1.1.2] - 2026-11-26
 
 ### Fixed

@@ -30,7 +30,7 @@ THIRD-PARTY DEPENDENCIES
 
 Tomi includes the following major open-source components: Jetpack Compose,
 AndroidX Activity, Lifecycle, Navigation, Room, DataStore, WorkManager,
-Glance, Health Connect Client, Material 3, Material Icons, Kotlin,
+Glance, Health Connect Client, DocumentFile, Material 3, Material Icons, Kotlin,
 kotlinx.coroutines, kotlinx.serialization, Vico, and Robolectric
 (test-only).
 

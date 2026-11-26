@@ -414,6 +414,9 @@ fun SettingsScreen(
             }
 
             HorizontalDivider()
+            GoogleDriveBackupSection(viewModel = viewModel, settings = settings)
+
+            HorizontalDivider()
             SettingsSection("Data & privacy")
             ListItem(
                 headlineContent = { Text("Export backup") },
@@ -613,7 +616,7 @@ internal fun PrivacyPolicyRow(onOpenPrivacy: () -> Unit) {
     ListItem(
         headlineContent = { Text("Privacy policy") },
         supportingContent = {
-            Text("No account, analytics, ads, or cloud upload. Step totals are cached locally; Health Connect remains read-only.")
+            Text("No account, analytics, or ads. Optional Drive backups go only to a folder you choose; Health Connect remains read-only.")
         },
         leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
         trailingContent = {
@@ -646,7 +649,7 @@ internal fun WeekdayChips(
 }
 
 @Composable
-private fun SettingsSection(title: String) {
+internal fun SettingsSection(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,

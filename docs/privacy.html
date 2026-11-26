@@ -18,7 +18,7 @@
 </head>
 <body>
   <h1>Tomi Privacy Policy</h1>
-  <p class="meta">Effective 25 November 2026 · Version 1.1 · Applies to Tomi for Android</p>
+  <p class="meta">Effective 26 November 2026 · Version 1.2 · Applies to Tomi for Android</p>
 
   <p>Tomi is an offline-first movement, task, and journal app for people who work at a desk. This policy explains what data Tomi handles, why it is handled, and the choices you have.</p>
 
@@ -38,7 +38,7 @@
       <li>Step totals cached from Health Connect for display in Tomi.</li>
       <li>Reminder, appearance, goal, and update preferences.</li>
     </ul>
-    <p>This data is stored in Tomi's app-private Room database and DataStore files. It is not uploaded to a Tomi server. Android cloud backup and device-transfer extraction are disabled; Tomi provides explicit JSON export and import instead.</p>
+    <p>This data is stored in Tomi's app-private Room database and DataStore files. It is not uploaded to a Tomi server. Android cloud backup and device-transfer extraction are disabled; Tomi provides explicit JSON export and import instead, plus optional user-selected Google Drive backup.</p>
   </section>
 
   <section>
@@ -57,7 +57,13 @@
   <section>
     <h2>Network access</h2>
     <p>The Play Store edition does not include Tomi's APK self-updater. The direct-download edition can contact GitHub to check for a new Tomi release and download a published APK. It verifies the download against the release's SHA-256 checksum, and Android verifies the APK signature before installation. Installation always requires your confirmation.</p>
-    <p>No analytics, advertising, account, or cloud-sync service is used. Tomi does not transmit tasks, journal text, mood, water, movement history, or cached step totals.</p>
+    <p>Tomi does not operate any analytics, advertising, account, or cloud-sync service. It does not transmit tasks, journal text, mood, water, movement history, or cached step totals to a Tomi server.</p>
+  </section>
+
+  <section>
+    <h2>Optional Google Drive backup</h2>
+    <p>Tomi can optionally write a JSON backup to a folder you select through Android's system document picker. This uses Android's Storage Access Framework, not a Google sign-in SDK or a Tomi account. Tomi receives read/write access only to the folder you choose; it does not receive your Google password or OAuth token.</p>
+    <p>The backup contains the records listed under “Data stored on your device.” It is written directly to your chosen provider at <code>Tomi Backups/tomi-backup.json</code>, overwritten on each sync, and controlled by your Google Drive account. Tomi never uploads it to a Tomi server. Disconnecting in Settings releases the folder grant; the existing file remains in your Drive until you delete it. Restoring a Drive backup replaces local Tomi data after confirmation.</p>
   </section>
 
   <section>

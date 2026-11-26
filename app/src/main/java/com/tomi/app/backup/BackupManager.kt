@@ -12,6 +12,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 
+interface BackupContentSource {
+    suspend fun export(): String
+    suspend fun import(input: InputStream)
+}
+
 class BackupManager(
     private val context: Context,
     private val database: TomiDatabase = TomiDatabase.get(context),
@@ -19,8 +24,8 @@ class BackupManager(
     private val rescheduleReminders: suspend () -> Unit = {
         ReminderScheduler(context, settingsRepository, ReminderNotifier(context)).reschedule()
     },
-) {
-    suspend fun export(): String = withContext(Dispatchers.IO) {
+) : BackupContentSource {
+    override suspend fun export(): String = withContext(Dispatchers.IO) {
         database.withTransaction {
             BackupCodec.encode(
                 TomiBackup(
@@ -42,13 +47,18 @@ class BackupManager(
         restore(BackupCodec.decode(content))
     }
 
-    suspend fun import(input: InputStream) = withContext(Dispatchers.IO) {
+    override suspend fun import(input: InputStream) = withContext(Dispatchers.IO) {
         restore(BackupCodec.decode(input))
     }
 
     private suspend fun restore(backup: TomiBackup) {
         val previousSettings = settingsRepository.settings.first()
-        val importedSettings = backup.settings.toEntity()
+        val importedSettings = backup.settings.toEntity().copy(
+            googleDriveTreeUri = previousSettings.googleDriveTreeUri,
+            googleDriveFolderName = previousSettings.googleDriveFolderName,
+            googleDriveLastBackupAt = previousSettings.googleDriveLastBackupAt,
+            googleDriveAutoSync = previousSettings.googleDriveAutoSync,
+        )
         val importedAt = System.currentTimeMillis()
         BackupRestoreCoordinator.restore(
             previousSettings = previousSettings,

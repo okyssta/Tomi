@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tomi.app.domain.reminder.ReminderSettings
 import java.time.DayOfWeek
 
@@ -21,6 +23,10 @@ val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 val SMART_PAUSE = booleanPreferencesKey("smart_pause")
 val AUTO_DOWNLOAD_UPDATES = booleanPreferencesKey("auto_download_updates")
 val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+val GOOGLE_DRIVE_TREE_URI = stringPreferencesKey("google_drive_tree_uri")
+val GOOGLE_DRIVE_FOLDER_NAME = stringPreferencesKey("google_drive_folder_name")
+val GOOGLE_DRIVE_LAST_BACKUP_AT = longPreferencesKey("google_drive_last_backup_at")
+val GOOGLE_DRIVE_AUTO_SYNC = booleanPreferencesKey("google_drive_auto_sync")
 
 val LAST_MOVEMENT_AT = androidx.datastore.preferences.core.longPreferencesKey("last_movement_at")
 val LAST_STEP_CHECK_AT = androidx.datastore.preferences.core.longPreferencesKey("last_step_check_at")
@@ -64,6 +70,10 @@ fun Preferences.toTomiSettings(): TomiSettings {
         smartPause = this[SMART_PAUSE] ?: true,
         autoDownloadUpdates = this[AUTO_DOWNLOAD_UPDATES] ?: true,
         onboardingComplete = this[ONBOARDING_COMPLETE] ?: false,
+        googleDriveTreeUri = this[GOOGLE_DRIVE_TREE_URI],
+        googleDriveFolderName = this[GOOGLE_DRIVE_FOLDER_NAME],
+        googleDriveLastBackupAt = this[GOOGLE_DRIVE_LAST_BACKUP_AT],
+        googleDriveAutoSync = this[GOOGLE_DRIVE_AUTO_SYNC] ?: true,
     )
 }
 
@@ -102,4 +112,8 @@ fun TomiSettings.writeTo(preferences: MutablePreferences) {
     preferences[SMART_PAUSE] = smartPause
     preferences[AUTO_DOWNLOAD_UPDATES] = autoDownloadUpdates
     preferences[ONBOARDING_COMPLETE] = onboardingComplete
+    preferences.putNullable(GOOGLE_DRIVE_TREE_URI, googleDriveTreeUri)
+    preferences.putNullable(GOOGLE_DRIVE_FOLDER_NAME, googleDriveFolderName)
+    preferences.putNullable(GOOGLE_DRIVE_LAST_BACKUP_AT, googleDriveLastBackupAt)
+    preferences[GOOGLE_DRIVE_AUTO_SYNC] = googleDriveAutoSync
 }
