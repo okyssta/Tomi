@@ -4,6 +4,15 @@ Verification is recorded here only after the corresponding command or artifact c
 
 ## Current candidate: 1.1.2 (version code 1001002)
 
+### Published release
+
+Release: <https://github.com/okyssta/Tomi/releases/tag/v1.1.2>
+
+- Release workflow run `45818302007` completed successfully at commit `d38cf002cd00b09cccf7ac3b5c402ac37bcda568`.
+- All seven published assets downloaded; `sha256sum --check SHA256SUMS.txt` passed.
+- Published `tomi-release.apk` SHA-256: `fa01d70edf19e76ac55c3a46f292f889807c2fdce501b161ff45abf12e0da5c8`.
+- `scripts/verify-release.sh v1.1.2` passed package/version/SDK identity, APK and AAB signer identity, 16 KB alignment, Play exclusions, and all checksums.
+
 ### Adaptive launcher icon fit
 
 - The combined T + steps foreground was scaled to 80% and recentered on the adaptive-icon canvas, keeping both foreground and monochrome artwork inside Android's 66dp safe circle.
