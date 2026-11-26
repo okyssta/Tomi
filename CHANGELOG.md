@@ -4,6 +4,13 @@ All notable changes to Tomi are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use semantic versioning.
 
+## [1.1.2] - 2026-11-26
+
+### Fixed
+
+- Scaled and centered the launcher artwork inside Android's adaptive-icon safe circle, including themed/monochrome icons.
+- Added geometry regression coverage for both foreground variants and updated store artwork to match.
+
 ## [1.1.1] - 2026-11-26
 
 ### Fixed

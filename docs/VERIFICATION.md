@@ -2,7 +2,17 @@
 
 Verification is recorded here only after the corresponding command or artifact check actually runs.
 
-## Current candidate: 1.1.1 (version code 1001001)
+## Current candidate: 1.1.2 (version code 1001002)
+
+### Adaptive launcher icon fit
+
+- The combined T + steps foreground was scaled to 80% and recentered on the adaptive-icon canvas, keeping both foreground and monochrome artwork inside Android's 66dp safe circle.
+- `LauncherIconGeometryTest` checks both foreground variants for safe-circle containment and horizontal/vertical centering.
+- Direct tests: **182 passed, 0 failures, 0 errors, 0 skipped**.
+- Play tests: **178 passed, 0 failures, 0 errors, 0 skipped**.
+- Local signed direct APK: `dist/Tomi-1.1.2.apk`, SHA-256 `81a518f067ac76cac266eca4def05e2c3c1bc036f84a7e5bfc97f63af5920bdd`, version `1.1.2`, code `1001002`, signed by the existing Tomi release certificate.
+
+## Previous release: 1.1.1 (version code 1001001)
 
 ### Published release
 
