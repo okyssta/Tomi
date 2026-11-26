@@ -397,12 +397,14 @@ fun SettingsScreen(
                     trailingContent = {
                         TextButton(
                             onClick = {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                        "package:${context.packageName}".toUri(),
-                                    ),
-                                )
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                            "package:${context.packageName}".toUri(),
+                                        ),
+                                    )
+                                }
                             },
                         ) { Text("Allow") }
                     },

@@ -170,11 +170,19 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            settingsRepository.settings.first()
-            _ready.value = true
-            refreshHealth()
-            if (BuildConfig.UPDATES_ENABLED) {
-                com.tomi.app.update.UpdateCheckScheduler.checkIfDue(getApplication())
+            try {
+                settingsRepository.settings.first()
+                _ready.value = true
+                refreshHealth()
+                if (BuildConfig.UPDATES_ENABLED) {
+                    com.tomi.app.update.UpdateCheckScheduler.checkIfDue(getApplication())
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _ready.value = true
+                _healthStatus.value = HealthStatus.UNKNOWN
+                emit("Startup check failed: ${error.message ?: "unknown error"}")
             }
         }
     }
@@ -379,18 +387,24 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
     fun checkForUpdates() {
         if (!BuildConfig.UPDATES_ENABLED) return
         viewModelScope.launch {
-            _updateState.value = UpdateUiState.Checking
-            val repository = UpdateRepository(
-                http = HttpUrlConnectionUpdateHttp(),
-                currentVersion = AppVersion.parse(BuildConfig.VERSION_NAME.substringBefore('-')),
-                repository = BuildConfig.GITHUB_REPOSITORY,
-            )
-            _updateState.value = when (val result = repository.check()) {
-                is UpdateResult.Available -> UpdateUiState.Available(result.info)
-                UpdateResult.UpToDate -> UpdateUiState.UpToDate
-                is UpdateResult.Error -> UpdateUiState.Error(result.cause.message ?: "Update check failed")
+            try {
+                _updateState.value = UpdateUiState.Checking
+                val repository = UpdateRepository(
+                    http = HttpUrlConnectionUpdateHttp(),
+                    currentVersion = AppVersion.parse(BuildConfig.VERSION_NAME.substringBefore('-')),
+                    repository = BuildConfig.GITHUB_REPOSITORY,
+                )
+                _updateState.value = when (val result = repository.check()) {
+                    is UpdateResult.Available -> UpdateUiState.Available(result.info)
+                    UpdateResult.UpToDate -> UpdateUiState.UpToDate
+                    is UpdateResult.Error -> UpdateUiState.Error(result.cause.message ?: "Update check failed")
+                }
+                settingsRepository.setLastUpdateCheckAt(System.currentTimeMillis())
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _updateState.value = UpdateUiState.Error(error.message ?: "Update check failed")
             }
-            settingsRepository.setLastUpdateCheckAt(System.currentTimeMillis())
         }
     }
 
@@ -449,7 +463,14 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
             putExtra(InstallUpdateContract.EXTRA_VERSION, info.versionName)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        try {
+            context.startActivity(intent)
+        } catch (error: Exception) {
+            _updateState.value = UpdateUiState.Error(
+                "Could not open the installer: ${error.message ?: "unknown error"}",
+                info,
+            )
+        }
     }
 
     fun clearAllData() {

@@ -4,6 +4,14 @@ All notable changes to Tomi are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use semantic versioning.
 
+## [1.1.1] - 2026-11-26
+
+### Fixed
+
+- Guarded startup reminder/update scheduling so a WorkManager failure cannot crash the app during launch.
+- Corrupt settings or update-download state now resets to defaults instead of aborting startup.
+- Update checks and installer launches now report an in-app error instead of propagating an uncaught exception.
+
 ## [Unreleased]
 
 ### Added

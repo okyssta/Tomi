@@ -1,7 +1,9 @@
 package com.tomi.app.update
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
@@ -14,7 +16,10 @@ internal data class PendingUpdateDownload(
     val enqueuedAt: Long,
 )
 
-private val Context.updateDownloadStore by preferencesDataStore(name = "update_download_state")
+private val Context.updateDownloadStore by preferencesDataStore(
+    name = "update_download_state",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 private val PENDING_UPDATE = stringPreferencesKey("pending_update")
 
 internal object UpdateDownloadStateStore {

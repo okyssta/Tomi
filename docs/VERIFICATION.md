@@ -2,7 +2,19 @@
 
 Verification is recorded here only after the corresponding command or artifact check actually runs.
 
-## Current candidate: 1.1.0 (version code 1001000)
+## Current candidate: 1.1.1 (version code 1001001)
+
+### Update/startup crash hardening
+
+- Startup reminder and update scheduling failures no longer escape `TomiApp.onCreate`.
+- Settings and update-download DataStore files recover from corruption with default values instead of terminating the app.
+- Update-check and installer launch failures now surface as in-app errors; the installer activity also catches unresolvable system intents.
+- `SettingsCorruptionTest` writes a deliberately corrupt preferences file and verifies that `SettingsRepository` falls back to defaults.
+- Direct tests: **180 passed, 0 failures, 0 errors, 0 skipped**.
+- Play tests: **176 passed, 0 failures, 0 errors, 0 skipped**.
+- Signed direct APK: `dist/Tomi-1.1.1.apk`, SHA-256 `260160eec1f00e27f2e8195a97799791070aab34be2a2eabbb67b446a9dc7a43`, version `1.1.1`, code `1001001`, signed by the existing Tomi release certificate.
+
+## Previous release: 1.1.0 (version code 1001000)
 
 ### Published release
 

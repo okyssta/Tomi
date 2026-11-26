@@ -31,14 +31,20 @@ class TomiApp : Application() {
         } else {
             registerReceiver(MovementDetectionReceiver(), filter)
         }
-        ReminderWorker.enqueue(this)
-        if (BuildConfig.UPDATES_ENABLED) UpdateCheckScheduler.scheduleDaily(this)
+        runCatching { ReminderWorker.enqueue(this) }
+        if (BuildConfig.UPDATES_ENABLED) {
+            runCatching { UpdateCheckScheduler.scheduleDaily(this) }
+        }
         scope.launch {
-            ReminderScheduler(
-                this@TomiApp,
-                SettingsRepository.from(this@TomiApp),
-                ReminderNotifier(this@TomiApp),
-            ).reschedule()
+            try {
+                ReminderScheduler(
+                    this@TomiApp,
+                    SettingsRepository.from(this@TomiApp),
+                    ReminderNotifier(this@TomiApp),
+                ).reschedule()
+            } catch (_: Exception) {
+                // A stale or corrupt settings file must not prevent the app from opening.
+            }
         }
     }
 }
