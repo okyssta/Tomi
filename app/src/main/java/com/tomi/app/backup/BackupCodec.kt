@@ -3,6 +3,7 @@ package com.tomi.app.backup
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import com.tomi.app.domain.prayer.TrackedPrayer
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.time.LocalDate
@@ -70,6 +71,7 @@ object BackupCodec {
             backup.checkIns.size,
             backup.water.size,
             backup.stepCache.size,
+            backup.prayers.size,
         ).forEach(::requireCollectionSize)
         backup.settings.toEntity()
         require(backup.settings.stepGoal in 1_000..30_000) { "Invalid step goal" }
@@ -121,6 +123,14 @@ object BackupCodec {
             require(steps.updatedAt <= System.currentTimeMillis() + MAX_STEP_CLOCK_SKEW_MS) {
                 "Step cache timestamp is in the future"
             }
+        }
+
+        val prayerNames = TrackedPrayer.entries.map { it.name }.toSet()
+        requireUnique(backup.prayers.map { it.date to it.prayer }) { "Duplicate prayer entry" }
+        backup.prayers.forEach { prayer ->
+            requireValidDate(prayer.date)
+            require(prayer.prayer in prayerNames) { "Invalid prayer" }
+            require(prayer.updatedAt >= 0L) { "Invalid prayer timestamp" }
         }
     }
 

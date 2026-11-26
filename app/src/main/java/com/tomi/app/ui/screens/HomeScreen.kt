@@ -54,6 +54,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tomi.app.data.local.MovementType
+import com.tomi.app.domain.addons.Addon
+import com.tomi.app.domain.prayer.PrayerSchedule
 import com.tomi.app.data.settings.ReminderRuntimeState
 import com.tomi.app.data.settings.TomiSettings
 import com.tomi.app.domain.movement.MovementStreak
@@ -73,6 +75,7 @@ fun HomeScreen(
     onStartMovement: (MovementType) -> Unit,
     onOpenTasks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenNamaz: () -> Unit,
     onConnectHealth: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -85,6 +88,7 @@ fun HomeScreen(
     val waterMl by viewModel.waterMl.collectAsStateWithLifecycle()
     val canUndoWater by viewModel.canUndoWater.collectAsStateWithLifecycle()
     val checkIn by viewModel.checkIn.collectAsStateWithLifecycle()
+    val prayerLogs by viewModel.prayerLogs.collectAsStateWithLifecycle()
     val healthStatus by viewModel.healthStatus.collectAsStateWithLifecycle()
     val stepSyncState by viewModel.stepSyncState.collectAsStateWithLifecycle()
     val now by produceState(initialValue = Instant.now()) {
@@ -157,6 +161,17 @@ fun HomeScreen(
                     onSnooze = viewModel::snoozeReminder,
                     onOpenSettings = onOpenSettings,
                 )
+            }
+            if (Addon.NAMAZ.id in settings.addonsEnabled) {
+                item {
+                    NamazCard(
+                        settings = settings,
+                        date = today,
+                        now = now,
+                        offeredCount = prayerLogs.count { it.offered },
+                        onOpenNamaz = onOpenNamaz,
+                    )
+                }
             }
             item {
                 Row(
@@ -360,6 +375,63 @@ private fun ReminderCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NamazCard(
+    settings: TomiSettings,
+    date: java.time.LocalDate,
+    now: Instant,
+    offeredCount: Int,
+    onOpenNamaz: () -> Unit,
+) {
+    val latitude = settings.prayerLatitude
+    val longitude = settings.prayerLongitude
+    val day = remember(latitude, longitude, date, settings.prayerMethod, settings.prayerMadhab) {
+        if (latitude == null || longitude == null) {
+            null
+        } else {
+            runCatching {
+                PrayerSchedule.day(
+                    latitude = latitude,
+                    longitude = longitude,
+                    date = date,
+                    methodId = settings.prayerMethod,
+                    madhabId = settings.prayerMadhab,
+                )
+            }.getOrNull()
+        }
+    }
+    val next = remember(day, now) { day?.let { PrayerSchedule.nextFromDay(it, now) } }
+    Card {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Namaz", style = MaterialTheme.typography.titleMedium)
+                Text("$offeredCount/5 offered", style = MaterialTheme.typography.bodyMedium)
+            }
+            if (day == null) {
+                Text(
+                    "Set your location to see prayer times.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (next != null) {
+                Text(
+                    "Next: ${next.prayer.displayName} · ${
+                        next.at.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+                    }",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            } else {
+                Text("No more prayers today.", style = MaterialTheme.typography.bodyLarge)
+            }
+            TextButton(onClick = onOpenNamaz) { Text("Open tracker") }
         }
     }
 }

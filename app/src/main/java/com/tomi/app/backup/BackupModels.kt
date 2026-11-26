@@ -4,6 +4,7 @@ import com.tomi.app.data.local.DailyCheckInEntity
 import com.tomi.app.data.local.JournalEntity
 import com.tomi.app.data.local.MovementEntity
 import com.tomi.app.data.local.MovementType
+import com.tomi.app.data.local.PrayerLogEntity
 import com.tomi.app.data.local.StepCacheEntity
 import com.tomi.app.data.local.TaskEntity
 import com.tomi.app.data.local.WaterEntity
@@ -24,6 +25,7 @@ data class TomiBackup(
     val checkIns: List<CheckInBackup> = emptyList(),
     val water: List<WaterBackup> = emptyList(),
     val stepCache: List<StepCacheBackup> = emptyList(),
+    val prayers: List<PrayerBackup> = emptyList(),
     val settings: SettingsBackup = SettingsBackup(),
 )
 
@@ -80,6 +82,14 @@ data class WaterBackup(val id: Long, val amountMl: Int, val timestamp: Long)
 data class StepCacheBackup(val date: String, val steps: Long, val updatedAt: Long)
 
 @Serializable
+data class PrayerBackup(
+    val date: String,
+    val prayer: String,
+    val offered: Boolean,
+    val updatedAt: Long,
+)
+
+@Serializable
 data class SettingsBackup(
     val remindersEnabled: Boolean = true,
     val intervalMinutes: Int = 40,
@@ -100,6 +110,9 @@ data class SettingsBackup(
     val dynamicColor: Boolean = true,
     val smartPause: Boolean = true,
     val autoDownloadUpdates: Boolean = true,
+    val addonsEnabled: List<String> = emptyList(),
+    val prayerMethod: String = "KARACHI",
+    val prayerMadhab: String = "HANAFI",
 )
 
 fun TaskEntity.toBackup() = TaskBackup(id, title, notes, dueAt, priority, category, completed, completedAt, createdAt, updatedAt)
@@ -120,6 +133,9 @@ fun WaterBackup.toEntity() = WaterEntity(id, amountMl, timestamp)
 fun StepCacheEntity.toBackup() = StepCacheBackup(date, steps, updatedAt)
 fun StepCacheBackup.toEntity() = StepCacheEntity(date, steps, updatedAt)
 
+fun PrayerLogEntity.toBackup() = PrayerBackup(date, prayer, offered, updatedAt)
+fun PrayerBackup.toEntity() = PrayerLogEntity(date, prayer, offered, updatedAt)
+
 fun TomiSettings.toBackup() = SettingsBackup(
     remindersEnabled = reminder.enabled,
     intervalMinutes = reminder.intervalMinutes,
@@ -134,6 +150,9 @@ fun TomiSettings.toBackup() = SettingsBackup(
     dynamicColor = dynamicColor,
     smartPause = smartPause,
     autoDownloadUpdates = autoDownloadUpdates,
+    addonsEnabled = addonsEnabled.toList(),
+    prayerMethod = prayerMethod,
+    prayerMadhab = prayerMadhab,
 )
 
 fun SettingsBackup.toEntity(): TomiSettings = TomiSettings(
@@ -152,5 +171,8 @@ fun SettingsBackup.toEntity(): TomiSettings = TomiSettings(
     dynamicColor = dynamicColor,
     smartPause = smartPause,
     autoDownloadUpdates = autoDownloadUpdates,
+    addonsEnabled = addonsEnabled.toSet(),
+    prayerMethod = prayerMethod,
+    prayerMadhab = prayerMadhab,
     onboardingComplete = true,
 )

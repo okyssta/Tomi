@@ -17,6 +17,12 @@ data class TomiSettings(
     val googleDriveFolderName: String? = null,
     val googleDriveLastBackupAt: Long? = null,
     val googleDriveAutoSync: Boolean = true,
+    val addonsEnabled: Set<String> = emptySet(),
+    val prayerLatitude: Double? = null,
+    val prayerLongitude: Double? = null,
+    val prayerLocationName: String? = null,
+    val prayerMethod: String = "KARACHI",
+    val prayerMadhab: String = "HANAFI",
 )
 
 data class ReminderRuntimeState(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
@@ -65,6 +66,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.tomi.app.BuildConfig
+import com.tomi.app.domain.addons.Addon
 import com.tomi.app.data.settings.ThemeMode
 import com.tomi.app.health.HealthStatus
 import com.tomi.app.ui.AboutActivity
@@ -82,6 +84,7 @@ fun SettingsScreen(
     viewModel: TomiViewModel,
     onConnectHealth: () -> Unit,
     onRequestBackgroundHealthPermissions: () -> Unit,
+    onOpenNamaz: () -> Unit,
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -415,6 +418,26 @@ fun SettingsScreen(
 
             HorizontalDivider()
             GoogleDriveBackupSection(viewModel = viewModel, settings = settings)
+
+            HorizontalDivider()
+            SettingsSection("Addons")
+            SettingsToggleRow(
+                title = Addon.NAMAZ.title,
+                supportingText = Addon.NAMAZ.description,
+                checked = Addon.NAMAZ.id in settings.addonsEnabled,
+                onCheckedChange = { viewModel.setAddonEnabled(Addon.NAMAZ, it) },
+                leadingIcon = Icons.Outlined.AccessTime,
+            )
+            if (Addon.NAMAZ.id in settings.addonsEnabled) {
+                ListItem(
+                    headlineContent = { Text("Open Namaz") },
+                    supportingContent = { Text("Prayer times, tracker, and calculation settings") },
+                    leadingContent = { Icon(Icons.Outlined.AccessTime, contentDescription = null) },
+                    trailingContent = {
+                        TextButton(onClick = onOpenNamaz) { Text("Open") }
+                    },
+                )
+            }
 
             HorizontalDivider()
             SettingsSection("Data & privacy")

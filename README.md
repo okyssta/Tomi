@@ -17,6 +17,7 @@ Tomi is an offline-first Android companion for people who spend long workdays at
 - **Water:** 250 ml quick-add with undo and a configurable daily goal.
 - **Progress:** weekly step chart, active minutes, movement history, and a movement-day streak.
 - **Widget:** steps, next reminder, and quick break actions on the home screen.
+- **Addons:** optional Namaz addon with on-device prayer times for your approximate location, Hanafi/Shafi Asr, Karachi/MWL/ISNA calculation methods, and a daily offered/not-offered tracker.
 - **Backups:** JSON export/import plus optional Google Drive backup through Android's system folder picker, with manual and automatic sync.
 - **Direct-download updates:** automatic release checks, optional Wi-Fi downloads, SHA-256 plus pinned signing-identity verification, and an explicit Android install prompt. The Play edition relies on Play updates.
 - **Material 3:** standard Android components, dynamic color, light/dark/system themes, and no custom decorative UI framework.
@@ -28,6 +29,7 @@ Download `tomi-release.apk` from the [latest release](https://github.com/okyssta
 - Android 8.0 (API 26) or newer is required.
 - Allow notifications for movement reminders.
 - Allow exact alarms if you want reminders to fire at the configured minute. Without this optional permission, Android may delay them.
+- The Namaz addon asks for approximate location only when you choose to use current location.
 - Install Health Connect from Google Play on Android 8–13. It is built into Android 14+.
 - In Tomi, open **Settings → Permissions & steps → Health Connect** and allow step access.
 - To include Google Fit data, connect Google Fit to Health Connect. Tomi reads the combined Health Connect total; it does not require a Google account or OAuth client.

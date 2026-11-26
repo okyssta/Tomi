@@ -10,6 +10,7 @@ Effective: 26 November 2026. Developer: [@okyssta](https://github.com/okyssta). 
 - Daily mood/energy check-ins
 - Water entries
 - Step totals cached from Health Connect
+- Prayer tracker entries and the optional approximate location used to calculate prayer times
 - Reminder settings, goals, theme, and update preferences
 
 Tomi stores these in its app-private Room database and DataStore files. Android cloud backup and device-transfer extraction are disabled. The app provides explicit JSON export and import instead, plus optional user-selected Google Drive backup.
@@ -45,6 +46,10 @@ Tomi can optionally write a JSON backup to a folder you select through Android's
 
 The backup contains the same records listed under "Data stored locally". It is written directly to your chosen provider at `Tomi Backups/tomi-backup.json`, overwritten on each sync, and controlled by your Google Drive account. Tomi never uploads it to a Tomi server. Disconnecting in Settings releases the folder grant; the existing file remains in your Drive until you delete it. Restoring a Drive backup replaces local Tomi data after confirmation.
 
+## Namaz addon and location
+
+The optional Namaz addon calculates prayer times on-device using the Adhan library and your approximate location. Tomi requests `ACCESS_COARSE_LOCATION` only when you tap "Use current location"; the permission is not required for any other feature. The latitude and longitude are stored only in Tomi's local settings to recalculate times; they are not uploaded to a Tomi server. Prayer offered/not-offered entries are stored locally and are included in your JSON/Drive backup.
+
 ## Permissions
 
 - **Notifications:** movement and update notifications.
@@ -54,6 +59,7 @@ The backup contains the same records listed under "Data stored locally". It is w
 - **Install unknown apps:** direct edition only; required solely for in-app APK installation.
 - **Internet:** direct edition only; release checks and downloads.
 - **Vibration:** optional reminder feedback.
+- **Approximate location:** optional Namaz addon only; used on-device for prayer times.
 
 Users can revoke permissions at any time in Android Settings.
 

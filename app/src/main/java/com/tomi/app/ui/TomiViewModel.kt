@@ -18,6 +18,7 @@ import com.tomi.app.data.local.DailyCheckInEntity
 import com.tomi.app.data.local.JournalEntity
 import com.tomi.app.data.local.MovementEntity
 import com.tomi.app.data.local.MovementType
+import com.tomi.app.data.local.PrayerLogEntity
 import com.tomi.app.data.local.TaskEntity
 import com.tomi.app.data.local.TomiDatabase
 import com.tomi.app.data.local.WaterEntity
@@ -27,6 +28,9 @@ import com.tomi.app.health.HealthConnectManager
 import com.tomi.app.health.HealthStatus
 import com.tomi.app.health.StepSyncResult
 import com.tomi.app.health.StepSyncPlanner
+import com.tomi.app.domain.addons.Addon
+import com.tomi.app.domain.prayer.PrayerLocationProvider
+import com.tomi.app.domain.prayer.TrackedPrayer
 import com.tomi.app.reminder.MovementSessionRecorder
 import com.tomi.app.reminder.ReminderNotifier
 import com.tomi.app.reminder.ReminderScheduler
@@ -136,6 +140,9 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
         database.waterDao().observeTotalMl(bounds.start.toEpochMilli(), bounds.endExclusive.toEpochMilli())
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+    val prayerLogs = currentDay.context.flatMapLatest { context ->
+        database.prayerLogDao().observeForDate(context.date.toString())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val todaySteps = combine(currentDay.context, stepCache) { context, entries ->
         entries.firstOrNull { it.date == context.date.toString() }?.steps
@@ -478,6 +485,79 @@ class TomiViewModel(application: Application) : AndroidViewModel(application) {
                 "Could not open the installer: ${error.message ?: "unknown error"}",
                 info,
             )
+        }
+    }
+
+    fun setAddonEnabled(addon: Addon, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                settingsRepository.updateSettings {
+                    it.copy(
+                        addonsEnabled = if (enabled) {
+                            it.addonsEnabled + addon.id
+                        } else {
+                            it.addonsEnabled - addon.id
+                        },
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Could not change addon: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun setPrayerOffered(prayer: TrackedPrayer, offered: Boolean) {
+        val date = currentDay.context.value.date.toString()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                database.prayerLogDao().upsert(
+                    PrayerLogEntity(
+                        date = date,
+                        prayer = prayer.name,
+                        offered = offered,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit("Could not save prayer: ${error.message ?: "unknown error"}")
+            }
+        }
+    }
+
+    fun refreshPrayerLocation() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val location = PrayerLocationProvider(getApplication()).currentLocation()
+                    ?: error("Location unavailable. Enable location access and try again.")
+                settingsRepository.updateSettings {
+                    it.copy(
+                        prayerLatitude = location.latitude,
+                        prayerLongitude = location.longitude,
+                        prayerLocationName = "Current location",
+                    )
+                }
+                emit("Prayer location updated")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                emit(error.message ?: "Could not read your location")
+            }
+        }
+    }
+
+    fun setPrayerMethod(methodId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateSettings { it.copy(prayerMethod = methodId) }
+        }
+    }
+
+    fun setPrayerMadhab(madhabId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateSettings { it.copy(prayerMadhab = madhabId) }
         }
     }
 

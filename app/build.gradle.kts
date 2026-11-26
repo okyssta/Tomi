@@ -154,6 +154,7 @@ dependencies {
     implementation(libs.androidx.glance.material3)
     implementation(libs.vico.compose)
     implementation(libs.vico.compose.m3)
+    implementation(libs.adhan)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 

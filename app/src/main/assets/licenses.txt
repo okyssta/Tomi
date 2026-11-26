@@ -31,15 +31,15 @@ THIRD-PARTY DEPENDENCIES
 Tomi includes the following major open-source components: Jetpack Compose,
 AndroidX Activity, Lifecycle, Navigation, Room, DataStore, WorkManager,
 Glance, Health Connect Client, DocumentFile, Material 3, Material Icons, Kotlin,
-kotlinx.coroutines, kotlinx.serialization, Vico, and Robolectric
-(test-only).
+kotlinx.coroutines, kotlinx.serialization, Vico, Adhan (prayer-time calculations, MIT),
+and Robolectric (test-only).
 
 The applicable license texts from the distributed dependencies are reproduced
 below. AndroidX, Compose, Material, Room, WorkManager, Glance, Health Connect
 Client, kotlinx.coroutines, kotlinx.serialization, and Vico are licensed
 under the Apache License, Version 2.0 unless a dependency's own notice states
-otherwise. Robolectric is licensed under the MIT License and is not included
-in the release APK.
+otherwise. Adhan and Robolectric are licensed under the MIT License; Robolectric
+is not included in the release APK.
 
 
 Apache License

@@ -18,7 +18,7 @@
 </head>
 <body>
   <h1>Tomi Privacy Policy</h1>
-  <p class="meta">Effective 26 November 2026 · Version 1.2 · Applies to Tomi for Android</p>
+  <p class="meta">Effective 26 November 2026 · Version 1.3 · Applies to Tomi for Android</p>
 
   <p>Tomi is an offline-first movement, task, and journal app for people who work at a desk. This policy explains what data Tomi handles, why it is handled, and the choices you have.</p>
 
@@ -36,6 +36,7 @@
       <li>Daily mood and energy check-ins.</li>
       <li>Water entries and daily goals.</li>
       <li>Step totals cached from Health Connect for display in Tomi.</li>
+      <li>Prayer tracker entries and the optional approximate location used to calculate prayer times.</li>
       <li>Reminder, appearance, goal, and update preferences.</li>
     </ul>
     <p>This data is stored in Tomi's app-private Room database and DataStore files. It is not uploaded to a Tomi server. Android cloud backup and device-transfer extraction are disabled; Tomi provides explicit JSON export and import instead, plus optional user-selected Google Drive backup.</p>
@@ -67,12 +68,18 @@
   </section>
 
   <section>
+    <h2>Namaz addon and location</h2>
+    <p>The optional Namaz addon calculates prayer times on-device using the Adhan library and your approximate location. Tomi requests <code>ACCESS_COARSE_LOCATION</code> only when you tap “Use current location”; the permission is not required for any other feature. The latitude and longitude are stored only in Tomi’s local settings to recalculate times; they are not uploaded to a Tomi server. Prayer offered/not-offered entries are stored locally and are included in your JSON or Drive backup.</p>
+  </section>
+
+  <section>
     <h2>Permissions</h2>
     <ul>
       <li><strong>Notifications:</strong> movement alarms and, in the direct edition, update notices.</li>
       <li><strong>Exact alarms:</strong> optional; improves reminder timing. Inexact alarms are used when it is not granted.</li>
       <li><strong>Boot completed:</strong> restores reminder scheduling after restart, app replacement, clock changes, or timezone changes.</li>
       <li><strong>Vibration:</strong> optional movement-alarm feedback.</li>
+      <li><strong>Approximate location:</strong> optional Namaz addon only; used on-device for prayer times.</li>
       <li><strong>Install unknown apps:</strong> direct edition only; required solely for in-app APK updates.</li>
       <li><strong>Internet:</strong> direct edition only; release checks and downloads.</li>
     </ul>

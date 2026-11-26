@@ -4,6 +4,18 @@ All notable changes to Tomi are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use semantic versioning.
 
+## [1.1.4] - 2026-11-26
+
+### Added
+
+- Addons section with an optional Namaz addon: on-device prayer times for the user's approximate location, Karachi/MWL/ISNA calculation methods, Hanafi/Shafi Asr, and a daily offered/not-offered tracker.
+- Home-screen Namaz card showing the next prayer and today's tracker progress.
+- Prayer tracker records are included in JSON and Google Drive backups; the database migrates version 1 to version 2 without dropping existing data.
+
+### Changed
+
+- Privacy policy documents approximate location use and prayer tracking.
+
 ## [1.1.3] - 2026-11-26
 
 ### Added

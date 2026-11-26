@@ -78,4 +78,26 @@ class SettingsRepositoryTest {
         assertEquals(999L, settings.googleDriveLastBackupAt)
         assertEquals(false, settings.googleDriveAutoSync)
     }
+
+    @Test
+    fun `persists namaz addon and prayer location settings`() = runBlocking {
+        repository.updateSettings {
+            it.copy(
+                addonsEnabled = setOf("namaz"),
+                prayerLatitude = 31.5204,
+                prayerLongitude = 74.3587,
+                prayerLocationName = "Lahore",
+                prayerMethod = "KARACHI",
+                prayerMadhab = "HANAFI",
+            )
+        }
+
+        val settings = repository.settings.first()
+        assertEquals(setOf("namaz"), settings.addonsEnabled)
+        assertEquals(31.5204, settings.prayerLatitude ?: 0.0, 0.0001)
+        assertEquals(74.3587, settings.prayerLongitude ?: 0.0, 0.0001)
+        assertEquals("Lahore", settings.prayerLocationName)
+        assertEquals("KARACHI", settings.prayerMethod)
+        assertEquals("HANAFI", settings.prayerMadhab)
+    }
 }

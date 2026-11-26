@@ -33,6 +33,7 @@ class BackupCodecTest {
             ),
             water = listOf(WaterBackup(4L, 250, 1_000L)),
             stepCache = listOf(StepCacheBackup("2026-11-24", 6_000L, 2L)),
+            prayers = listOf(PrayerBackup("2026-11-24", "FAJR", true, 2L)),
             settings = SettingsBackup(
                 remindersEnabled = true,
                 intervalMinutes = 35,
@@ -47,6 +48,9 @@ class BackupCodecTest {
                 dynamicColor = false,
                 smartPause = true,
                 autoDownloadUpdates = false,
+                addonsEnabled = listOf("namaz"),
+                prayerMethod = "MUSLIM_WORLD_LEAGUE",
+                prayerMadhab = "SHAFI",
             ),
         )
 
@@ -83,6 +87,18 @@ class BackupCodecTest {
         val json = BackupCodec.encode(TomiBackup()).replace("\"version\": 1", "\"version\": 99")
 
         assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode(json) }
+    }
+
+    @Test
+    fun `rejects duplicate prayer entries`() {
+        val backup = TomiBackup(
+            prayers = listOf(
+                PrayerBackup("2026-11-24", "FAJR", true, 1L),
+                PrayerBackup("2026-11-24", "FAJR", false, 2L),
+            ),
+        )
+
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.encode(backup) }
     }
 
     @Test

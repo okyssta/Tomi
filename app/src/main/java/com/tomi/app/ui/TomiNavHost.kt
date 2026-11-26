@@ -31,6 +31,7 @@ import com.tomi.app.ui.screens.HomeScreen
 import com.tomi.app.ui.screens.JournalScreen
 import com.tomi.app.ui.screens.MoveScreen
 import com.tomi.app.ui.screens.OnboardingScreen
+import com.tomi.app.ui.screens.PrayerScreen
 import com.tomi.app.ui.screens.ProgressScreen
 import com.tomi.app.ui.screens.SettingsScreen
 import com.tomi.app.ui.screens.TasksScreen
@@ -125,6 +126,7 @@ fun TomiNavHost(
                     onStartMovement = { type -> navController.navigate("move/${type.name}") },
                     onOpenTasks = { navController.navigate("tasks") { launchSingleTop = true } },
                     onOpenSettings = { navController.navigate("settings") },
+                    onOpenNamaz = { navController.navigate("namaz") },
                     onConnectHealth = onRequestHealthPermissions,
                 )
             }
@@ -136,8 +138,10 @@ fun TomiNavHost(
                     viewModel = viewModel,
                     onConnectHealth = onRequestHealthPermissions,
                     onRequestBackgroundHealthPermissions = onRequestBackgroundHealthPermissions,
+                    onOpenNamaz = { navController.navigate("namaz") },
                 )
             }
+            composable("namaz") { PrayerScreen(viewModel) }
             composable("move/{type}") { entry ->
                 val type = runCatching { MovementType.valueOf(entry.arguments?.getString("type").orEmpty()) }
                     .getOrDefault(MovementType.WALK)

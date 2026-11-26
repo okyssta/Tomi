@@ -37,6 +37,7 @@ class BackupManager(
                     checkIns = database.checkInDao().observeRecent(Int.MAX_VALUE).first().map { it.toBackup() },
                     water = database.waterDao().observeAll().first().map { it.toBackup() },
                     stepCache = database.stepCacheDao().observeAll().first().map { it.toBackup() },
+                    prayers = database.prayerLogDao().observeAll().first().map { it.toBackup() },
                     settings = settingsRepository.settings.first().toBackup(),
                 ),
             )
@@ -58,6 +59,9 @@ class BackupManager(
             googleDriveFolderName = previousSettings.googleDriveFolderName,
             googleDriveLastBackupAt = previousSettings.googleDriveLastBackupAt,
             googleDriveAutoSync = previousSettings.googleDriveAutoSync,
+            prayerLatitude = previousSettings.prayerLatitude,
+            prayerLongitude = previousSettings.prayerLongitude,
+            prayerLocationName = previousSettings.prayerLocationName,
         )
         val importedAt = System.currentTimeMillis()
         BackupRestoreCoordinator.restore(
@@ -72,6 +76,7 @@ class BackupManager(
                     database.checkInDao().deleteAll()
                     database.waterDao().deleteAll()
                     database.stepCacheDao().deleteAll()
+                    database.prayerLogDao().deleteAll()
 
                     backup.tasks.forEach { database.taskDao().insert(it.toEntity()) }
                     backup.journal.forEach { database.journalDao().insert(it.toEntity()) }
@@ -82,6 +87,7 @@ class BackupManager(
                         val entity = entry.toEntity()
                         database.stepCacheDao().upsert(entity.copy(updatedAt = minOf(entity.updatedAt, importedAt)))
                     }
+                    backup.prayers.forEach { database.prayerLogDao().upsert(it.toEntity()) }
                 }
             },
             rescheduleReminders = rescheduleReminders,

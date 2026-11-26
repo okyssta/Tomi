@@ -3,9 +3,11 @@ package com.tomi.app.data.settings
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.tomi.app.domain.reminder.ReminderSettings
 import java.time.DayOfWeek
 
@@ -27,6 +29,12 @@ val GOOGLE_DRIVE_TREE_URI = stringPreferencesKey("google_drive_tree_uri")
 val GOOGLE_DRIVE_FOLDER_NAME = stringPreferencesKey("google_drive_folder_name")
 val GOOGLE_DRIVE_LAST_BACKUP_AT = longPreferencesKey("google_drive_last_backup_at")
 val GOOGLE_DRIVE_AUTO_SYNC = booleanPreferencesKey("google_drive_auto_sync")
+val ADDONS_ENABLED = stringSetPreferencesKey("addons_enabled")
+val PRAYER_LATITUDE = doublePreferencesKey("prayer_latitude")
+val PRAYER_LONGITUDE = doublePreferencesKey("prayer_longitude")
+val PRAYER_LOCATION_NAME = stringPreferencesKey("prayer_location_name")
+val PRAYER_METHOD = stringPreferencesKey("prayer_method")
+val PRAYER_MADHAB = stringPreferencesKey("prayer_madhab")
 
 val LAST_MOVEMENT_AT = androidx.datastore.preferences.core.longPreferencesKey("last_movement_at")
 val LAST_STEP_CHECK_AT = androidx.datastore.preferences.core.longPreferencesKey("last_step_check_at")
@@ -74,6 +82,12 @@ fun Preferences.toTomiSettings(): TomiSettings {
         googleDriveFolderName = this[GOOGLE_DRIVE_FOLDER_NAME],
         googleDriveLastBackupAt = this[GOOGLE_DRIVE_LAST_BACKUP_AT],
         googleDriveAutoSync = this[GOOGLE_DRIVE_AUTO_SYNC] ?: true,
+        addonsEnabled = this[ADDONS_ENABLED] ?: emptySet(),
+        prayerLatitude = this[PRAYER_LATITUDE],
+        prayerLongitude = this[PRAYER_LONGITUDE],
+        prayerLocationName = this[PRAYER_LOCATION_NAME],
+        prayerMethod = this[PRAYER_METHOD] ?: "KARACHI",
+        prayerMadhab = this[PRAYER_MADHAB] ?: "HANAFI",
     )
 }
 
@@ -116,4 +130,10 @@ fun TomiSettings.writeTo(preferences: MutablePreferences) {
     preferences.putNullable(GOOGLE_DRIVE_FOLDER_NAME, googleDriveFolderName)
     preferences.putNullable(GOOGLE_DRIVE_LAST_BACKUP_AT, googleDriveLastBackupAt)
     preferences[GOOGLE_DRIVE_AUTO_SYNC] = googleDriveAutoSync
+    preferences[ADDONS_ENABLED] = addonsEnabled
+    preferences.putNullable(PRAYER_LATITUDE, prayerLatitude)
+    preferences.putNullable(PRAYER_LONGITUDE, prayerLongitude)
+    preferences.putNullable(PRAYER_LOCATION_NAME, prayerLocationName)
+    preferences[PRAYER_METHOD] = prayerMethod
+    preferences[PRAYER_MADHAB] = prayerMadhab
 }
