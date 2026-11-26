@@ -2,7 +2,27 @@
 
 Verification is recorded here only after the corresponding command or artifact check actually runs.
 
-## Current candidate: 1.1.2 (version code 1001002)
+## Current candidate: 1.1.3 (version code 1001003)
+
+### Google Drive backup
+
+- Added a Storage Access Framework Google Drive backup mode; the user selects a folder, Tomi writes `Tomi Backups/tomi-backup.json`, and no Google OAuth client or Play Services account is involved.
+- Manual backup, restore with replacement confirmation, disconnect, six-hour periodic sync, and app-close sync are implemented.
+- Direct tests: **187 passed, 0 failures, 0 errors, 0 skipped**.
+- Play tests: **183 passed, 0 failures, 0 errors, 0 skipped**.
+- `GoogleDriveBackupRepositoryTest` covers connect/backup, disabled auto-sync, disconnect, and restore input.
+- `SettingsRepositoryTest` covers persistence of the Drive folder grant without disturbing other settings.
+
+### Published release
+
+Release: <https://github.com/okyssta/Tomi/releases/tag/v1.1.3>
+
+- Release workflow run `45832107265` completed successfully at commit `3d442640b9e867035e0a96275d51de08ea4a9bd0`.
+- All seven published assets downloaded; checksums passed.
+- Published `tomi-release.apk` SHA-256: `1c6b382107838a932a0b5ae3fdd0b9caf48c701499171fb98f5f495b4463b7b3`.
+- `scripts/verify-release.sh v1.1.3` passed package/version/SDK identity, APK and AAB signer identity, 16 KB alignment, Play exclusions, and all checksums.
+
+## Previous release: 1.1.2 (version code 1001002)
 
 ### Published release
 
